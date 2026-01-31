@@ -5,15 +5,16 @@ export class GeminiService {
   
   static async testConnection() {
     try {
+      // Direct initialization inside the call as per guidelines
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       await ai.models.generateContent({
-        model: 'gemini-2.5-flash-lite-latest',
+        model: 'gemini-3-flash-preview',
         contents: 'ping',
       });
       return { success: true };
     } catch (error: any) {
       console.error("API Key Verification Failed:", error);
-      return { success: false, error: error.message || "Invalid API Key" };
+      return { success: false, error: error.message || "Connection failed" };
     }
   }
 
@@ -21,7 +22,7 @@ export class GeminiService {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const sceneCount = Math.max(4, Math.ceil(durationSeconds / 9));
-    const targetWordCount = Math.floor((durationSeconds / 60) * 155); 
+    const targetWordCount = Math.floor((durationSeconds / 60) * 150); 
     const randomSeed = Math.random().toString(36).substring(7);
 
     const prompt = `
