@@ -64,12 +64,8 @@ export class VoiceService {
   }
 
   static async generateGeminiTTS(text: string, voiceId: string): Promise<string | null> {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      console.warn("Gemini API key missing for TTS");
-      return null;
-    }
-
+    const apiKey = process.env.API_KEY || "";
+    
     try {
       const actualVoice = GEMINI_VOICE_MAP[voiceId.toLowerCase()] || 'zephyr';
       const ai = new GoogleGenAI({ apiKey });
@@ -87,8 +83,12 @@ export class VoiceService {
       });
 
       return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
-    } catch (err) {
+    } catch (err: any) {
       console.error("Gemini TTS failed:", err);
+      // Propagate key-related errors so UI can handle them
+      if (err.message?.toLowerCase().includes("api key") || err.message?.toLowerCase().includes("not found")) {
+        throw err;
+      }
       return null;
     }
   }

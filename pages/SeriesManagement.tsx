@@ -44,7 +44,6 @@ const SeriesManagement: React.FC = () => {
     };
 
     checkKeyStatus();
-    // Re-check on window focus to catch external key selections
     window.addEventListener('focus', checkKeyStatus);
     return () => window.removeEventListener('focus', checkKeyStatus);
   }, []);
@@ -66,13 +65,22 @@ const SeriesManagement: React.FC = () => {
     if (typeof window.aistudio !== 'undefined') {
       try {
         await window.aistudio.openSelectKey();
-        setApiKeyReady(true); // Assume success per instructions
+        setApiKeyReady(true);
         return true;
       } catch (e) {
         console.error("Key selection failed", e);
       }
     }
     return false;
+  };
+
+  const isKeyError = (msg: string = "") => {
+    const lower = msg.toLowerCase();
+    return lower.includes("api key") || 
+           lower.includes("api_key") || 
+           lower.includes("not found") || 
+           lower.includes("403") ||
+           lower.includes("unauthorized");
   };
 
   const handleSelectNiche = (niche: NicheCategory) => {
@@ -121,7 +129,7 @@ const SeriesManagement: React.FC = () => {
       }
     } catch (err: any) { 
       console.error("Preview failed", err);
-      if (err.message?.includes("API key") || err.message?.includes("403") || err.message?.includes("not found")) {
+      if (isKeyError(err.message)) {
         await handleKeySelection();
       }
       setPreviewingVoiceId(null); 
@@ -145,17 +153,20 @@ const SeriesManagement: React.FC = () => {
     e.preventDefault();
     if (!selectedNiche) return;
     
-    // Always attempt to start. If it fails, we catch and prompt for key.
+    // Quick pre-check
+    if (!process.env.API_KEY && !apiKeyReady) {
+      await handleKeySelection();
+    }
+
     setIsGenerating(true);
     setGenProgress("Initializing Engine...");
 
     try {
       const test = await GeminiService.testConnection();
       if (!test.success) {
-        // Handle missing key or invalid key
-        if (test.error.includes("entity was not found") || test.error.includes("403") || test.error.includes("API key")) {
+        if (isKeyError(test.error)) {
            await handleKeySelection();
-           setGenProgress("Retrying with new credentials...");
+           setGenProgress("Retrying connection...");
            const secondTest = await GeminiService.testConnection();
            if (!secondTest.success) throw new Error(secondTest.error);
         } else {
@@ -221,7 +232,7 @@ const SeriesManagement: React.FC = () => {
       }, 1000);
     } catch (err: any) {
       console.error("Launch Critical Failure:", err);
-      if (err.message?.includes("API key") || err.message?.includes("not found")) {
+      if (isKeyError(err.message)) {
          await handleKeySelection();
       } else {
          alert(`Launch Interrupted: ${err.message || "Unknown error occurred."}`);
@@ -264,7 +275,7 @@ const SeriesManagement: React.FC = () => {
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
-          <h1 className="text-4xl font-black text-white italic tracking-tighter">NICHE EXPLORER</h1>
+          <h1 className="text-4xl font-black text-white italic tracking-tighter uppercase">Niche Explorer</h1>
           <p className="text-slate-400 font-medium">Select a category to begin your automation journey.</p>
         </div>
         

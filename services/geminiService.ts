@@ -3,17 +3,15 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 export class GeminiService {
   
-  private static get ai() {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      throw new Error("API_KEY_NOT_SET");
-    }
+  private static getClient() {
+    const apiKey = process.env.API_KEY || "";
     return new GoogleGenAI({ apiKey });
   }
 
   static async testConnection() {
     try {
-      const response = await this.ai.models.generateContent({
+      const client = this.getClient();
+      await client.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: 'ping',
       });
@@ -66,7 +64,8 @@ export class GeminiService {
     `;
 
     try {
-      const response = await this.ai.models.generateContent({
+      const client = this.getClient();
+      const response = await client.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
@@ -98,18 +97,17 @@ export class GeminiService {
 
       return JSON.parse(response.text || '{}');
     } catch (e: any) {
-      if (e.message === "API_KEY_NOT_SET") throw e;
       console.error("Script Generation Error:", e);
-      throw new Error(e.message || "Generation Failed");
+      throw e;
     }
   }
 
   static async generateImage(prompt: string, anchor: string, style: string) {
     try {
-      // We combine the Anchor (Subject) and the Prompt (Scene/Action) to ensure variety AND consistency
       const fullPrompt = `Vertical 9:16 cinematic frame. Style: ${style}. Subject: ${anchor}. Scene Action: ${prompt}. High detail, photorealistic, 8k, vibrant lighting.`;
       
-      const response = await this.ai.models.generateContent({
+      const client = this.getClient();
+      const response = await client.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts: [{ text: fullPrompt }] },
         config: { imageConfig: { aspectRatio: "9:16" } }
@@ -125,7 +123,7 @@ export class GeminiService {
       }
     } catch (e: any) {
       console.error("Image gen failed:", e);
-      if (e.message === "API_KEY_NOT_SET") throw e;
+      throw e;
     }
     return null;
   }
@@ -142,7 +140,6 @@ export class GeminiService {
       
       const imageUrl = await this.generateImage(script.scenes[i].imagePrompt, script.characterAnchor, style);
       
-      // If generation fails, we provide a category-aware placeholder or throw to avoid "Black Hole" defaults
       scenesWithImages.push({
         ...script.scenes[i],
         imageUrl: imageUrl || `https://placehold.co/1080x1920/1e293b/white?text=Scene+${i+1}+Rendering+Failed`
