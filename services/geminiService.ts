@@ -3,18 +3,15 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 export class GeminiService {
   
-  private static getClient() {
-    // We use process.env.API_KEY directly as required.
-    // If it's missing, we still try to initialize to allow the platform's 
-    // injection mechanisms a chance to work or the SDK to provide the correct error.
-    const apiKey = process.env.API_KEY || "";
-    return new GoogleGenAI({ apiKey });
-  }
-
   static async testConnection() {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey || apiKey.trim() === "") {
+      return { success: false, error: "API_KEY_MISSING" };
+    }
+
     try {
-      const ai = this.getClient();
-      const response = await ai.models.generateContent({
+      const ai = new GoogleGenAI({ apiKey });
+      await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: 'ping',
       });
@@ -23,13 +20,16 @@ export class GeminiService {
       console.error("API Connection Test Failed:", error);
       return { 
         success: false, 
-        error: error.message || "Connection failed. Please check your API key configuration." 
+        error: error.message || "Connection failed. Please verify your project billing." 
       };
     }
   }
 
   static async generateScript(topic: string, description: string, tone: string, style: string, durationSeconds: number = 60, voiceId: string = 'liam') {
-    const ai = this.getClient();
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) throw new Error("API_KEY_MISSING");
+    
+    const ai = new GoogleGenAI({ apiKey });
     
     const sceneCount = Math.max(4, Math.ceil(durationSeconds / 9));
     const targetWordCount = Math.floor((durationSeconds / 60) * 150); 
@@ -64,47 +64,45 @@ export class GeminiService {
       }
     `;
 
-    try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: {
-          thinkingConfig: { thinkingBudget: 0 },
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              characterAnchor: { type: Type.STRING },
-              hook: { type: Type.STRING },
-              scenes: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    text: { type: Type.STRING },
-                    imagePrompt: { type: Type.STRING },
-                  },
-                  required: ['text', 'imagePrompt']
-                }
-              },
-              callToAction: { type: Type.STRING }
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: {
+        thinkingConfig: { thinkingBudget: 0 },
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            characterAnchor: { type: Type.STRING },
+            hook: { type: Type.STRING },
+            scenes: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  text: { type: Type.STRING },
+                  imagePrompt: { type: Type.STRING },
+                },
+                required: ['text', 'imagePrompt']
+              }
             },
-            required: ['title', 'characterAnchor', 'hook', 'scenes', 'callToAction']
-          }
+            callToAction: { type: Type.STRING }
+          },
+          required: ['title', 'characterAnchor', 'hook', 'scenes', 'callToAction']
         }
-      });
+      }
+    });
 
-      return JSON.parse(response.text || '{}');
-    } catch (e: any) {
-      console.error("Script Generation Error:", e);
-      throw new Error(e.message || "Generation Failed");
-    }
+    return JSON.parse(response.text || '{}');
   }
 
   static async generateImage(prompt: string, anchor: string, style: string) {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) return null;
+
     try {
-      const ai = this.getClient();
+      const ai = new GoogleGenAI({ apiKey });
       const fullPrompt = `Vertical 9:16 cinematic frame. Subject: ${anchor}. Scene: ${prompt}. Art Style: ${style}. High detail, 8k, consistent subject.`;
       
       const response = await ai.models.generateContent({

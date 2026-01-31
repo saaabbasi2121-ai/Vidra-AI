@@ -85,7 +85,8 @@ export class VoiceService {
   }
 
   static async generateGeminiTTS(text: string, voiceId: string): Promise<string | null> {
-    const apiKey = process.env.API_KEY || "";
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) return null;
     
     try {
       const actualVoice = GEMINI_VOICE_MAP[voiceId.toLowerCase()] || 'zephyr';
