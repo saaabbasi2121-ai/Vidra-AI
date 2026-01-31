@@ -1,25 +1,28 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { VideoPlatform, VideoSeries, GeneratedVideo } from '../types';
+import { VideoPlatform, VideoSeries, GeneratedVideo, VoiceOption } from '../types';
 import { GeminiService } from '../services/geminiService';
+import { VoiceService } from '../services/voiceService';
 
 const SeriesManagement: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [series, setSeries] = useState<VideoSeries[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState<VoiceOption[]>([]);
 
   useEffect(() => {
     const saved = localStorage.getItem('vidra_series');
     if (saved) {
       setSeries(JSON.parse(saved));
     } else {
-      // Seed initial series if empty
       const initial: VideoSeries[] = [{
         id: '1',
         topic: 'Space Exploration',
         tone: 'Informative & Mysterious',
         style: 'Cinematic',
+        voiceId: '21m00Tcm4lvcESmeDXWV',
+        durationSeconds: 60,
         platform: VideoPlatform.TIKTOK,
         frequency: 'Daily',
         isActive: true,
@@ -28,6 +31,9 @@ const SeriesManagement: React.FC = () => {
       setSeries(initial);
       localStorage.setItem('vidra_series', JSON.stringify(initial));
     }
+
+    // Fetch voices for the modal
+    VoiceService.getVoices().then(setAvailableVoices);
   }, []);
 
   const [formData, setFormData] = useState({
@@ -35,7 +41,9 @@ const SeriesManagement: React.FC = () => {
     tone: 'Viral & Engaging',
     platform: VideoPlatform.TIKTOK,
     frequency: 'Daily',
-    style: 'Cinematic Photography'
+    style: 'Cinematic Photography',
+    voiceId: '21m00Tcm4lvcESmeDXWV',
+    durationSeconds: 60
   });
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -50,6 +58,8 @@ const SeriesManagement: React.FC = () => {
       platform: formData.platform,
       frequency: formData.frequency as any,
       style: formData.style,
+      voiceId: formData.voiceId,
+      durationSeconds: formData.durationSeconds,
       isActive: true,
       createdAt: new Date().toISOString()
     };
@@ -59,9 +69,8 @@ const SeriesManagement: React.FC = () => {
     localStorage.setItem('vidra_series', JSON.stringify(updatedSeries));
     setShowCreateModal(false);
 
-    // Auto-generate first video for this series
     try {
-      const bundle = await GeminiService.generateFullVideoBundle(formData.topic, formData.tone, formData.style);
+      const bundle = await GeminiService.generateFullVideoBundle(formData.topic, formData.tone, formData.style, formData.durationSeconds);
       const newVideo: GeneratedVideo = {
         id: Math.random().toString(36).substr(2, 9),
         seriesId: newId,
@@ -71,7 +80,9 @@ const SeriesManagement: React.FC = () => {
         thumbnailUrl: bundle.thumbnailUrl,
         status: 'Ready',
         scheduledAt: new Date().toISOString(),
-        platforms: [formData.platform]
+        platforms: [formData.platform],
+        voiceId: formData.voiceId,
+        durationSeconds: formData.durationSeconds
       };
 
       const existingVideos = JSON.parse(localStorage.getItem('vidra_videos') || '[]');
@@ -80,7 +91,15 @@ const SeriesManagement: React.FC = () => {
       console.error("Auto-generation failed", err);
     } finally {
       setIsGenerating(false);
-      setFormData({ topic: '', tone: 'Viral & Engaging', platform: VideoPlatform.TIKTOK, frequency: 'Daily', style: 'Cinematic Photography' });
+      setFormData({ 
+        topic: '', 
+        tone: 'Viral & Engaging', 
+        platform: VideoPlatform.TIKTOK, 
+        frequency: 'Daily', 
+        style: 'Cinematic Photography',
+        voiceId: '21m00Tcm4lvcESmeDXWV',
+        durationSeconds: 60
+      });
     }
   };
 
@@ -118,30 +137,23 @@ const SeriesManagement: React.FC = () => {
             <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
             </div>
-            
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 0 1-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 0 0 6.16-12.12A14.98 14.98 0 0 0 9.631 8.41m5.96 5.96a14.926 14.926 0 0 1-5.841 2.58m-.119-8.54a6 6 0 0 0-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 0 0-2.58 5.84m2.699-2.7c-.91.91-2.305.91-3.215 0a2.25 2.25 0 0 1 0-3.215 2.25 2.25 0 0 1 3.215 0Z" />
-                </svg>
-              </div>
-            </div>
-            
             <h3 className="text-xl font-bold text-white mb-1">{s.topic}</h3>
             <p className="text-slate-400 text-sm mb-6">{s.style} • {s.tone}</p>
             
-            <div className="space-y-3 mb-6 bg-slate-800/30 p-4 rounded-xl">
+            <div className="space-y-2 mb-6 bg-slate-800/30 p-4 rounded-xl">
               <div className="flex justify-between text-xs">
-                <span className="text-slate-500 font-medium">Platform</span>
-                <span className="text-indigo-300 font-bold">{s.platform}</span>
+                <span className="text-slate-500">Duration</span>
+                <span className="text-white font-bold">{s.durationSeconds}s</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-slate-500 font-medium">Frequency</span>
+                <span className="text-slate-500">Voice</span>
+                <span className="text-indigo-300 font-bold truncate max-w-[120px]">
+                  {availableVoices.find(v => v.id === s.voiceId)?.name || 'Default'}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Frequency</span>
                 <span className="text-slate-200 font-bold">{s.frequency}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500 font-medium">Live Posts</span>
-                <span className="text-emerald-500 font-black">ACTIVE</span>
               </div>
             </div>
             
@@ -163,7 +175,7 @@ const SeriesManagement: React.FC = () => {
             <div className="flex justify-between items-center mb-8">
               <div>
                 <h2 className="text-2xl font-black text-white">Create Video Series</h2>
-                <p className="text-slate-400 text-sm mt-1">Vidra will auto-generate videos based on these settings.</p>
+                <p className="text-slate-400 text-sm mt-1">Configure your AI narrative and visual parameters.</p>
               </div>
               <button onClick={() => setShowCreateModal(false)} className="p-2 text-slate-500 hover:text-white bg-slate-800 rounded-full">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
@@ -172,7 +184,7 @@ const SeriesManagement: React.FC = () => {
               </button>
             </div>
             
-            <form onSubmit={handleCreate} className="space-y-6">
+            <form onSubmit={handleCreate} className="space-y-5">
               <div>
                 <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Video Niche / Topic</label>
                 <input 
@@ -183,6 +195,35 @@ const SeriesManagement: React.FC = () => {
                   value={formData.topic}
                   onChange={e => setFormData({...formData, topic: e.target.value})}
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Narrator Voice (ElevenLabs)</label>
+                  <select 
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-indigo-500 transition-colors shadow-inner"
+                    value={formData.voiceId}
+                    onChange={e => setFormData({...formData, voiceId: e.target.value})}
+                  >
+                    {availableVoices.map(voice => (
+                      <option key={voice.id} value={voice.id}>{voice.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Video Length</label>
+                  <select 
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-indigo-500 transition-colors shadow-inner"
+                    value={formData.durationSeconds}
+                    onChange={e => setFormData({...formData, durationSeconds: parseInt(e.target.value)})}
+                  >
+                    <option value={30}>30 Seconds</option>
+                    <option value={60}>60 Seconds</option>
+                    <option value={90}>90 Seconds</option>
+                    <option value={120}>120 Seconds</option>
+                    <option value={180}>180 Seconds</option>
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

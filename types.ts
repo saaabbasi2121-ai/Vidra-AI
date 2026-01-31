@@ -12,10 +12,17 @@ export enum SubscriptionPlan {
   PRO = 'Pro'
 }
 
+export interface VoiceOption {
+  id: string;
+  name: string;
+  previewUrl?: string;
+  provider: 'ElevenLabs' | 'Gemini';
+}
+
+// Added SocialAccount interface to fix missing export error in SocialSettings.tsx
 export interface SocialAccount {
   platform: VideoPlatform;
   username: string;
-  avatarUrl?: string;
   isConnected: boolean;
   lastSync?: string;
 }
@@ -25,6 +32,8 @@ export interface VideoSeries {
   topic: string;
   tone: string;
   style: string;
+  voiceId: string;
+  durationSeconds: number;
   platform: VideoPlatform;
   frequency: 'Daily' | '3x / week' | 'Weekly';
   isActive: boolean;
@@ -36,6 +45,7 @@ export interface VideoScene {
   text: string;
   imagePrompt: string;
   imageUrl?: string;
+  audioUrl?: string;
 }
 
 export interface GeneratedVideo {
@@ -48,6 +58,8 @@ export interface GeneratedVideo {
   status: 'Generating' | 'Ready' | 'Posted' | 'Failed';
   scheduledAt: string;
   platforms: VideoPlatform[];
+  voiceId?: string;
+  durationSeconds?: number;
 }
 
 export interface PlanLimits {
