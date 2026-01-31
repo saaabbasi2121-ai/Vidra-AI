@@ -1,0 +1,7 @@
+{
+  "name": "Vidra - Automated Video SaaS",
+  "description": "An AI-powered platform to generate, voice-over, and auto-post faceless short-form videos for TikTok, YouTube Shorts, and Instagram Reels.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
