@@ -15,6 +15,7 @@ const SeriesManagement: React.FC = () => {
   const [availableVoices, setAvailableVoices] = useState<VoiceOption[]>([]);
   const [seriesToDelete, setSeriesToDelete] = useState<VideoSeries | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [apiKeyReady, setApiKeyReady] = useState(!!process.env.API_KEY);
   
   const [selectedNiche, setSelectedNiche] = useState<NicheCategory | null>(null);
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -22,7 +23,6 @@ const SeriesManagement: React.FC = () => {
   
   // Voice Interaction States
   const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
-  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -33,6 +33,14 @@ const SeriesManagement: React.FC = () => {
       setSeries(JSON.parse(saved));
     }
     VoiceService.getVoices().then(setAvailableVoices);
+
+    const checkInitialKey = async () => {
+      if (typeof window.aistudio !== 'undefined') {
+        const has = await window.aistudio.hasSelectedApiKey();
+        setApiKeyReady(has || !!process.env.API_KEY);
+      }
+    };
+    checkInitialKey();
   }, []);
 
   const [formData, setFormData] = useState({
@@ -48,19 +56,13 @@ const SeriesManagement: React.FC = () => {
     n.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  /**
-   * Proactively triggers API key selection if missing.
-   * Following the "Assume success" rule for race conditions.
-   */
-  const ensureApiKeySelection = async () => {
+  const handleKeySelection = async () => {
     if (typeof window.aistudio !== 'undefined') {
-      const hasKey = await window.aistudio.hasSelectedApiKey();
-      if (!hasKey) {
-        await window.aistudio.openSelectKey();
-        return true; // Proceed immediately
-      }
+      await window.aistudio.openSelectKey();
+      setApiKeyReady(true);
+      return true;
     }
-    return true;
+    return false;
   };
 
   const handleSelectNiche = (niche: NicheCategory) => {
@@ -74,17 +76,20 @@ const SeriesManagement: React.FC = () => {
     setShowConfigModal(true);
   };
 
-  const handlePreviewVoice = async (vId: string) => {
-    if (previewingVoiceId === vId) return;
+  const handlePreviewVoice = async (vId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Don't trigger selection when clicking preview
+    
+    if (previewingVoiceId === vId) {
+      stopAudio();
+      return;
+    }
 
-    // Trigger key selection if we're in the AI Studio context
-    await ensureApiKeySelection();
+    if (!apiKeyReady && !process.env.API_KEY) {
+      await handleKeySelection();
+    }
 
     setPreviewingVoiceId(vId);
-    
-    if (currentSourceRef.current) {
-      try { currentSourceRef.current.stop(); } catch (e) {}
-    }
+    stopAudio();
 
     try {
       if (!audioContextRef.current) {
@@ -108,33 +113,44 @@ const SeriesManagement: React.FC = () => {
       } else { 
         setPreviewingVoiceId(null); 
       }
-    } catch (err) { 
+    } catch (err: any) { 
       console.error("Preview failed", err);
+      if (err.message?.includes("Requested entity was not found") || err.message?.includes("API key")) {
+        await handleKeySelection();
+      }
       setPreviewingVoiceId(null); 
     }
   };
 
+  const stopAudio = () => {
+    if (currentSourceRef.current) {
+      try { currentSourceRef.current.stop(); } catch (e) {}
+      currentSourceRef.current = null;
+    }
+    setPreviewingVoiceId(null);
+  };
+
   const handleSelectVoice = (vId: string) => {
     setFormData(prev => ({ ...prev, voiceId: vId }));
-    if (window.navigator.vibrate) window.navigator.vibrate(100);
+    if (window.navigator.vibrate) window.navigator.vibrate(50);
   };
 
   const handleLaunch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedNiche) return;
     
-    await ensureApiKeySelection();
+    if (!apiKeyReady && !process.env.API_KEY) {
+      await handleKeySelection();
+    }
 
     setIsGenerating(true);
     setGenProgress("Verifying Pipeline...");
     
-    // Explicitly test the connection
     const test = await GeminiService.testConnection();
     if (!test.success) {
-      // Handle the "Requested entity was not found" or key errors by re-opening the key dialog
       if (typeof window.aistudio !== 'undefined' && 
          (test.error.includes("entity was not found") || test.error.includes("403") || test.error.includes("key") || test.error.includes("API key"))) {
-         await window.aistudio.openSelectKey();
+         await handleKeySelection();
       } else {
          console.error("Pipeline Error:", test.error);
          alert(`Pipeline Status: ${test.error}`);
@@ -202,9 +218,8 @@ const SeriesManagement: React.FC = () => {
       }, 1000);
     } catch (err: any) {
       console.error("Critical Failure:", err);
-      // If we failed due to a missing/bad key during bundle generation, try to recover
-      if (err.message?.includes("API key") && typeof window.aistudio !== 'undefined') {
-         await window.aistudio.openSelectKey();
+      if (err.message?.includes("API key") || err.message?.includes("Requested entity was not found")) {
+         await handleKeySelection();
       } else {
          alert(`Generation Failure: ${err.message || "Unknown error occurred."}`);
       }
@@ -224,6 +239,26 @@ const SeriesManagement: React.FC = () => {
 
   return (
     <div className="space-y-12 animate-in slide-in-from-bottom-4 duration-500 pb-20">
+      {!apiKeyReady && !process.env.API_KEY && (
+        <div className="bg-indigo-600/10 border border-indigo-500/20 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in zoom-in-95">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z" /></svg>
+            </div>
+            <div>
+              <p className="text-white font-black text-sm uppercase tracking-tight">API Key Required</p>
+              <p className="text-slate-400 text-xs font-medium">Please select a Gemini API key from a paid GCP project to enable full video automation features.</p>
+            </div>
+          </div>
+          <button 
+            onClick={handleKeySelection}
+            className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl text-xs transition-all shadow-lg shadow-indigo-600/20 whitespace-nowrap"
+          >
+            Select API Key
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h1 className="text-4xl font-black text-white italic tracking-tighter">NICHE EXPLORER</h1>
@@ -325,7 +360,13 @@ const SeriesManagement: React.FC = () => {
                           </div>
                        </div>
 
-                       <button onClick={handleLaunch} className="w-full py-6 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xl rounded-2xl shadow-xl shadow-indigo-600/30 transition-all active:scale-95">Trigger Engine Launch</button>
+                       <button 
+                        onClick={handleLaunch} 
+                        disabled={!apiKeyReady && !process.env.API_KEY}
+                        className="w-full py-6 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xl rounded-2xl shadow-xl shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
+                      >
+                        {(!apiKeyReady && !process.env.API_KEY) ? 'Select API Key to Launch' : 'Trigger Engine Launch'}
+                      </button>
                     </div>
 
                     <div className="space-y-6">
@@ -339,19 +380,35 @@ const SeriesManagement: React.FC = () => {
                        
                        <div className="flex items-center gap-2 px-1">
                           <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></div>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tap to Preview Tone • Double Tap/Hold to Select</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tap Avatar to Preview Tone • Tap Card to Select</p>
                        </div>
 
                        <div className="grid grid-cols-2 gap-3 h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                           {availableVoices.filter(v => v.gender === voiceFilter).map(voice => (
                             <div 
                               key={voice.id} 
-                              onClick={() => handlePreviewVoice(voice.id)}
-                              onDoubleClick={() => handleSelectVoice(voice.id)}
+                              onClick={() => handleSelectVoice(voice.id)}
                               className={`p-4 rounded-3xl border transition-all text-left flex gap-4 items-center group relative cursor-pointer select-none ${formData.voiceId === voice.id ? 'bg-indigo-600/20 border-indigo-500 shadow-[0_10px_30px_rgba(99,102,241,0.15)]' : 'bg-slate-950 border-slate-800 hover:border-slate-700 shadow-inner'}`}
                             >
-                               <div className={`w-12 h-12 rounded-xl bg-slate-800 flex-shrink-0 border border-slate-700 overflow-hidden shadow-lg transition-all duration-300 ${previewingVoiceId === voice.id ? 'scale-110 border-indigo-500 ring-4 ring-indigo-500/20' : ''}`}>
-                                  <img src={voice.avatarUrl} alt={voice.name} className="w-full h-full object-cover" />
+                               <div 
+                                 onClick={(e) => handlePreviewVoice(voice.id, e)}
+                                 className={`w-12 h-12 rounded-xl bg-slate-800 flex-shrink-0 border border-slate-700 overflow-hidden shadow-lg transition-all duration-300 relative group/avatar ${previewingVoiceId === voice.id ? 'scale-110 border-indigo-500 ring-4 ring-indigo-500/30' : 'hover:scale-105'}`}
+                               >
+                                  <img src={voice.avatarUrl} alt={voice.name} className={`w-full h-full object-cover transition-opacity ${previewingVoiceId === voice.id ? 'opacity-40' : 'group-hover/avatar:opacity-60'}`} />
+                                  
+                                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                    {previewingVoiceId === voice.id ? (
+                                      <div className="flex items-end gap-0.5 h-4">
+                                        <div className="w-1 bg-white rounded-full animate-[equalizer_0.8s_ease-in-out_infinite]"></div>
+                                        <div className="w-1 bg-white rounded-full animate-[equalizer_0.6s_ease-in-out_infinite_0.1s]"></div>
+                                        <div className="w-1 bg-white rounded-full animate-[equalizer_1s_ease-in-out_infinite_0.2s]"></div>
+                                      </div>
+                                    ) : (
+                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-white opacity-0 group-hover/avatar:opacity-100 transition-opacity">
+                                        <path d="M6.3 2.841A1.5 1.5 0 0 0 4 4.11V15.89a1.5 1.5 0 0 0 2.3 1.269l9.344-5.89a1.5 1.5 0 0 0 0-2.538L6.3 2.841Z" />
+                                      </svg>
+                                    )}
+                                  </div>
                                </div>
                                <div>
                                   <p className={`font-black text-sm ${formData.voiceId === voice.id ? 'text-white' : 'text-slate-400 group-hover:text-slate-200 transition-colors'}`}>{voice.name}</p>
@@ -364,7 +421,7 @@ const SeriesManagement: React.FC = () => {
                                )}
                                {previewingVoiceId === voice.id && (
                                  <div className="absolute left-0 bottom-0 w-full h-1.5 bg-indigo-600 overflow-hidden rounded-b-3xl">
-                                    <div className="h-full bg-white/50 animate-[voice-load_1.5s_linear_infinite]" style={{ width: '40%' }}></div>
+                                    <div className="h-full bg-white/50 animate-[voice-load_1.5s_linear_infinite]" style={{ width: '100%' }}></div>
                                  </div>
                                )}
                             </div>
@@ -393,7 +450,11 @@ const SeriesManagement: React.FC = () => {
       <style>{`
         @keyframes voice-load {
           0% { transform: translateX(-100%); }
-          100% { transform: translateX(300%); }
+          100% { transform: translateX(100%); }
+        }
+        @keyframes equalizer {
+          0%, 100% { height: 4px; }
+          50% { height: 16px; }
         }
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
