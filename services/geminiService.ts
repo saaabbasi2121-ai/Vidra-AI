@@ -17,42 +17,47 @@ export class GeminiService {
     }
   }
 
-  static async generateScript(topic: string, description: string, tone: string, style: string, durationSeconds: number = 60) {
+  static async generateScript(topic: string, description: string, tone: string, style: string, durationSeconds: number = 60, voiceId: string = 'Charon') {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    // For 60s, we need about 6-8 scenes to keep the viewer engaged.
+    // Calculate scenes for actual coverage. 
+    // Average speaking rate is ~130-150 words per minute.
     const sceneCount = Math.max(6, Math.ceil(durationSeconds / 8));
-    const targetWordCount = Math.floor((durationSeconds / 60) * 160);
+    const targetWordCount = Math.floor((durationSeconds / 60) * 150);
+    const randomSeed = Math.random().toString(36).substring(7);
 
     const prompt = `
-      CRITICAL INSTRUCTION: You are a world-class viral content creator. 
-      Generate a script for a video series.
+      CRITICAL SYSTEM OVERRIDE: 
+      You are an expert faceless content strategist. 
       
-      SERIES TOPIC: ${topic}
-      USER'S SPECIFIC DESCRIPTION: "${description}"
-      TONE: ${tone}
-      ART STYLE: ${style}
-      TOTAL VIDEO DURATION TARGET: ${durationSeconds} SECONDS
+      SERIES CONTEXT:
+      - TOPIC: ${topic}
+      - GENRE/DESCRIPTION: "${description}"
+      - TONE: ${tone}
+      - VISUAL STYLE: ${style}
+      - TARGET DURATION: ${durationSeconds} SECONDS
+      - SELECTED VOICE: ${voiceId}
+      - RANDOM SEED: ${randomSeed}
 
       STRICT CONTENT RULES:
-      1. IGNORE ALL DEFAULT ASTRONOMY KNOWLEDGE. 
-      2. If the USER'S DESCRIPTION is "Motivational quotes", you MUST ONLY generate motivational quotes.
-      3. DO NOT return content about Space, Black Holes, or Stars unless explicitly mentioned in the DESCRIPTION.
-      4. SCENE COUNT: Return EXACTLY ${sceneCount} scenes.
-      5. SCENE LENGTH: To reach the ${durationSeconds}s target, EACH scene's "text" MUST be at least 25-30 words long.
-      6. TOTAL WORDS: The sum of all scene text should be roughly ${targetWordCount} words.
+      1. FORBIDDEN THEMES: Space, Galaxies, Planets, Stars, Black Holes.
+      2. CONSISTENCY: You MUST define a "characterAnchor". This is a detailed description of the main subject/character that will appear in ALL scenes.
+      3. RHYTHM: The script must be tailored for the ${voiceId} voice. 
+      4. DURATION COMPLIANCE: Return EXACTLY ${sceneCount} scenes.
+      5. WORD COUNT: Total script length MUST be approximately ${targetWordCount} words. Each scene text should be roughly ${Math.floor(targetWordCount / sceneCount)} words to ensure the video lasts exactly ${durationSeconds} seconds.
 
-      JSON FORMAT ONLY:
+      JSON STRUCTURE:
       {
-        "title": "Viral Title",
-        "hook": "Aggressive opening hook",
+        "title": "A unique viral title",
+        "characterAnchor": "Detailed physical description of the subject",
+        "hook": "Strong opening hook",
         "scenes": [
           { 
-            "text": "A long paragraph of narration text (approx 30 words) that matches the user's description and tone perfectly.", 
-            "imagePrompt": "A highly detailed, cinematic image prompt for an AI generator matching the ${style} style and scene context." 
+            "text": "Specific narration text matching the duration requirement...", 
+            "imagePrompt": "Action/setting only. The characterAnchor will be added automatically." 
           }
         ],
-        "callToAction": "Engaging outro"
+        "callToAction": "Outro"
       }
     `;
 
@@ -60,12 +65,13 @@ export class GeminiService {
       model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 4000 },
+        thinkingConfig: { thinkingBudget: 8000 },
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
           properties: {
             title: { type: Type.STRING },
+            characterAnchor: { type: Type.STRING },
             hook: { type: Type.STRING },
             scenes: {
               type: Type.ARRAY,
@@ -80,22 +86,23 @@ export class GeminiService {
             },
             callToAction: { type: Type.STRING }
           },
-          required: ['title', 'hook', 'scenes', 'callToAction']
+          required: ['title', 'characterAnchor', 'hook', 'scenes', 'callToAction']
         }
       }
     });
 
-    const parsed = JSON.parse(response.text || '{}');
-    return parsed;
+    return JSON.parse(response.text || '{}');
   }
 
-  static async generateImage(prompt: string) {
+  static async generateImage(prompt: string, anchor: string, style: string) {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const fullPrompt = `Vertical 9:16 high-quality cinematic frame. Subject: ${anchor}. Scene: ${prompt}. Art Style: ${style}. Professional photography, hyper-detailed, consistent character appearance, 8k resolution.`;
+    
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
-          parts: [{ text: `A high-quality 9:16 vertical cinematic masterpiece: ${prompt}. Cinematic lighting, detailed textures, 8k resolution.` }]
+          parts: [{ text: fullPrompt }]
         },
         config: {
           imageConfig: { aspectRatio: "9:16" }
@@ -108,20 +115,24 @@ export class GeminiService {
         }
       }
     } catch (e) {
-      console.error("Image generation failed", e);
+      console.error("Visual gen failed:", e);
     }
     return null;
   }
 
-  static async generateFullVideoBundle(topic: string, description: string, tone: string, style: string, durationSeconds: number = 60) {
-    const script = await this.generateScript(topic, description, tone, style, durationSeconds);
-    const scenesWithImages = [];
+  static async generateFullVideoBundle(topic: string, description: string, tone: string, style: string, durationSeconds: number = 60, voiceId: string = 'Charon', onProgress?: (msg: string) => void) {
+    if (onProgress) onProgress("Developing Unique Script...");
+    const script = await this.generateScript(topic, description, tone, style, durationSeconds, voiceId);
     
-    for (const scene of script.scenes) {
-      const imageUrl = await this.generateImage(scene.imagePrompt);
+    if (onProgress) onProgress(`Defining Visual Anchor: ${script.characterAnchor.substring(0, 30)}...`);
+    
+    const scenesWithImages = [];
+    for (let i = 0; i < script.scenes.length; i++) {
+      if (onProgress) onProgress(`Visualizing Scene ${i + 1}/${script.scenes.length}...`);
+      const imageUrl = await this.generateImage(script.scenes[i].imagePrompt, script.characterAnchor, style);
       scenesWithImages.push({
-        ...scene,
-        imageUrl: imageUrl || 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=800' // Neutral abstract grey/blue
+        ...script.scenes[i],
+        imageUrl: imageUrl || 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=800'
       });
     }
 

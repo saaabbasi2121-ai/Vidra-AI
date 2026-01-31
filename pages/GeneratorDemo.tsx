@@ -66,8 +66,8 @@ const GeneratorDemo: React.FC = () => {
       }
       addLog('✅ API Connection verified.');
 
-      // Fix: Added missing description argument to match GeminiService.generateScript(topic, description, tone, style)
-      const script = await GeminiService.generateScript(topic, topic, 'Inspirational', 'Cinematic Photography');
+      // Correctly passing all arguments including durationSeconds and voiceId
+      const script = await GeminiService.generateScript(topic, topic, 'Inspirational', 'Cinematic Photography', 60, 'Charon');
       setResult(script);
       addLog(`✅ Script generated: "${script.title}"`);
       
@@ -79,7 +79,7 @@ const GeneratorDemo: React.FC = () => {
       
       for (let i = 0; i < scenesToGen.length; i++) {
         addLog(`Scene ${i+1}/${scenesToGen.length}: Interpreting image prompt...`);
-        const img = await GeminiService.generateImage(scenesToGen[i].imagePrompt);
+        const img = await GeminiService.generateImage(scenesToGen[i].imagePrompt, script.characterAnchor, 'Cinematic Photography');
         if (img) {
           generatedImages.push(img);
           setImages([...generatedImages]);
