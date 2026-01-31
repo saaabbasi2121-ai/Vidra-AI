@@ -1,5 +1,5 @@
-
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { VideoPlatform, VideoSeries } from '../types';
 
 const SeriesManagement: React.FC = () => {
@@ -96,9 +96,12 @@ const SeriesManagement: React.FC = () => {
               </div>
             </div>
             
-            <button className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-sm font-semibold rounded-xl transition-colors">
+            <Link 
+              to="/queue" 
+              className="block w-full text-center py-2.5 bg-slate-800 hover:bg-indigo-600 hover:text-white text-sm font-semibold rounded-xl transition-all"
+            >
               Manage Queue
-            </button>
+            </Link>
           </div>
         ))}
 
