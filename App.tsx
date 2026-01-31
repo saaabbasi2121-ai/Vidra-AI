@@ -1,13 +1,13 @@
 
 import React from 'react';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { ICONS } from './constants';
-import Dashboard from './pages/Dashboard';
-import SeriesManagement from './pages/SeriesManagement';
-import VideoQueue from './pages/VideoQueue';
-import Billing from './pages/Billing';
-import GeneratorDemo from './pages/GeneratorDemo';
-import SocialSettings from './pages/SocialSettings';
+import { ICONS } from './constants.tsx';
+import Dashboard from './pages/Dashboard.tsx';
+import SeriesManagement from './pages/SeriesManagement.tsx';
+import VideoQueue from './pages/VideoQueue.tsx';
+import Billing from './pages/Billing.tsx';
+import GeneratorDemo from './pages/GeneratorDemo.tsx';
+import SocialSettings from './pages/SocialSettings.tsx';
 
 const Sidebar = () => {
   const location = useLocation();

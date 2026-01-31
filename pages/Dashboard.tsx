@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { SubscriptionPlan, PLAN_CONFIGS } from '../types';
+import { SubscriptionPlan, PLAN_CONFIGS } from '../types.ts';
 
 const StatCard = ({ title, value, change, isPositive, subtext }: { title: string; value: string; change?: string; isPositive?: boolean; subtext?: string }) => (
   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-indigo-500/30 transition-all">

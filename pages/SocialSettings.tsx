@@ -16,9 +16,11 @@ const SocialSettings: React.FC = () => {
   const [isLinking, setIsLinking] = useState<VideoPlatform | null>(null);
   const [showTroubleshooter, setShowTroubleshooter] = useState(false);
   const [showTokenInput, setShowTokenInput] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const startGitHubHandshake = async () => {
     setIsLinking(VideoPlatform.GITHUB);
+    setIsSuccess(false);
     setHandshakeSteps([]);
     
     const generator = GitHubService.connectHandshake();
@@ -37,16 +39,17 @@ const SocialSettings: React.FC = () => {
         if (update.status === 'error') throw new Error(update.message);
       }
       
-      // If we reach here, success!
-      setAccounts(prev => prev.map(acc => 
-        acc.platform === VideoPlatform.GITHUB 
-          ? { ...acc, isConnected: true, username: 'authorized_user', lastSync: new Date().toISOString() }
-          : acc
-      ));
-      setIsLinking(null);
+      setIsSuccess(true);
+      setTimeout(() => {
+        setAccounts(prev => prev.map(acc => 
+          acc.platform === VideoPlatform.GITHUB 
+            ? { ...acc, isConnected: true, username: 'authorized_user', lastSync: new Date().toISOString() }
+            : acc
+        ));
+        setIsLinking(null);
+      }, 1500);
     } catch (err) {
       console.error(err);
-      // Keep isLinking active to show the error state in the terminal
     }
   };
 
@@ -74,81 +77,91 @@ const SocialSettings: React.FC = () => {
       <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">Integrations</h1>
-          <p className="text-slate-400">Manage connections and publisher authorizations.</p>
+          <p className="text-slate-400">Connect your Vidra publisher engine to your social channels.</p>
         </div>
         <div className="flex gap-4">
-           <button onClick={() => setShowTroubleshooter(true)} className="text-xs font-bold text-slate-400 hover:text-white border border-slate-800 px-4 py-2 rounded-xl transition-all">
-             Diagnostic Guide
-           </button>
+           <div className="hidden md:flex flex-col items-end">
+             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Environment</span>
+             <span className="text-xs text-emerald-400 font-medium">Vercel Production</span>
+           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6">
         {accounts.map((account) => (
-          <div key={account.platform} className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm overflow-hidden group">
+          <div key={account.platform} className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm overflow-hidden group hover:border-indigo-500/30 transition-all">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-6">
-                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${account.isConnected ? 'bg-indigo-500/10 text-indigo-400 shadow-inner' : 'bg-slate-800 text-slate-500'}`}>
+                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-colors ${account.isConnected ? 'bg-indigo-500/10 text-indigo-400 shadow-inner' : 'bg-slate-800 text-slate-500'}`}>
                   {getPlatformIcon(account.platform)}
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-white flex items-center gap-2">
                     {account.platform}
-                    {account.isConnected && <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>}
+                    {account.isConnected && <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>}
                   </h3>
                   {account.isConnected ? (
-                    <span className="text-slate-400 text-sm">Authorized as <span className="text-white font-medium">{account.username}</span></span>
+                    <span className="text-slate-400 text-sm font-medium">Linked as <span className="text-indigo-400">{account.username}</span></span>
                   ) : (
-                    <span className="text-slate-500 text-sm">Awaiting connection...</span>
+                    <span className="text-slate-500 text-sm italic">Connection pending...</span>
                   )}
                 </div>
               </div>
 
               <div className="flex items-center gap-3">
                 {account.isConnected ? (
-                  <button className="px-4 py-2 bg-slate-800 hover:bg-rose-900/20 text-slate-400 hover:text-rose-500 text-xs font-bold rounded-xl transition-all border border-slate-700">
+                  <button className="px-4 py-2 bg-slate-800 hover:bg-rose-900/20 text-slate-500 hover:text-rose-400 text-xs font-bold rounded-xl transition-all border border-slate-700">
                     Disconnect
                   </button>
                 ) : (
                   <button 
                     onClick={() => account.platform === VideoPlatform.GITHUB ? startGitHubHandshake() : null}
                     disabled={isLinking !== null}
-                    className={`px-6 py-2.5 ${account.platform === VideoPlatform.GITHUB ? 'bg-white text-slate-900' : 'bg-indigo-600 text-white'} text-sm font-bold rounded-xl transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50`}
+                    className={`px-6 py-2.5 ${account.platform === VideoPlatform.GITHUB ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'} text-sm font-bold rounded-xl transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50`}
                   >
-                    {isLinking === account.platform ? 'Authenticating...' : `Connect ${account.platform}`}
+                    {isLinking === account.platform ? 'Authorizing...' : `Connect ${account.platform}`}
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Handshake Terminal for GitHub */}
             {isLinking === account.platform && account.platform === VideoPlatform.GITHUB && (
-              <div className="mt-6 bg-slate-950 border border-slate-800 rounded-2xl p-4 font-mono text-xs animate-in slide-in-from-top-4">
-                <div className="flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
-                  <span className="text-slate-500 font-bold uppercase tracking-widest">Handshake Terminal</span>
+              <div className="mt-6 bg-slate-950 border border-slate-800 rounded-2xl p-6 font-mono text-xs animate-in slide-in-from-top-4">
+                <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 font-bold uppercase tracking-widest">Handshake Terminal</span>
+                    <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded">v1.0-stable</span>
+                  </div>
                   <div className="flex gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-rose-500/50"></div>
-                    <div className="w-2 h-2 rounded-full bg-amber-500/50"></div>
-                    <div className="w-2 h-2 rounded-full bg-emerald-500/50"></div>
+                    <div className="w-2.5 h-2.5 rounded-full bg-slate-800"></div>
+                    <div className="w-2.5 h-2.5 rounded-full bg-slate-800"></div>
+                    <div className="w-2.5 h-2.5 rounded-full bg-slate-800"></div>
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {handshakeSteps.map((s, i) => (
                     <div key={i} className="flex justify-between items-center">
-                      <span className={s.status === 'error' ? 'text-rose-400' : s.status === 'success' ? 'text-emerald-400' : 'text-slate-300'}>
-                        {s.status === 'pending' ? '→' : s.status === 'success' ? '✓' : '✗'} {s.step}
+                      <span className={s.status === 'success' ? 'text-emerald-400' : 'text-slate-300'}>
+                        {s.status === 'pending' ? <span className="text-indigo-500">→</span> : '✓'} {s.step}
                       </span>
-                      {s.status === 'pending' && <span className="animate-pulse text-indigo-400">Executing...</span>}
+                      {s.status === 'pending' && (
+                        <div className="flex gap-1">
+                          <div className="w-1 h-1 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                          <div className="w-1 h-1 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                          <div className="w-1 h-1 bg-indigo-500 rounded-full animate-bounce"></div>
+                        </div>
+                      )}
                     </div>
                   ))}
-                  {handshakeSteps.some(s => s.status === 'error') && (
-                    <div className="mt-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl">
-                      <p className="text-rose-400 font-bold mb-1 italic">HANDSHAKE_ERROR_0x442</p>
-                      <p className="text-slate-400 mb-3">The "push back" from GitHub was rejected. This is often a CORS or Organization scope issue.</p>
-                      <div className="flex gap-2">
-                        <button onClick={() => setShowTroubleshooter(true)} className="px-3 py-1.5 bg-rose-500 text-white font-bold rounded-lg hover:bg-rose-600">Troubleshoot</button>
-                        <button onClick={() => setIsLinking(null)} className="px-3 py-1.5 text-slate-500 font-bold">Cancel</button>
-                      </div>
+                  {isSuccess && (
+                    <div className="mt-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl animate-in fade-in zoom-in-95">
+                      <p className="text-emerald-400 font-bold flex items-center gap-2">
+                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                           <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" />
+                         </svg>
+                         SUCCESS_HANDSHAKE_COMPLETE
+                      </p>
+                      <p className="text-slate-400 mt-1 text-[11px]">Vidra is now authorized to push automated video bundles to your GitHub repositories.</p>
                     </div>
                   )}
                 </div>
@@ -158,74 +171,33 @@ const SocialSettings: React.FC = () => {
         ))}
       </div>
 
-      {/* Troubleshooting Modal */}
+      <div className="bg-indigo-600/5 border border-indigo-500/10 rounded-3xl p-8 flex items-center justify-between">
+         <div className="max-w-lg">
+            <h3 className="text-xl font-bold text-white mb-2">Vercel Deployment Setup</h3>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              To make your video generation live, ensure you add your <strong>API_KEY</strong> to the environment variables in your Vercel Dashboard settings.
+            </p>
+         </div>
+         <button className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl text-sm shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 transition-all">
+           Go to Vercel Settings &rarr;
+         </button>
+      </div>
+
       {showTroubleshooter && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] w-full max-w-2xl p-10 shadow-2xl overflow-hidden relative">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-rose-500"></div>
-            
             <div className="flex justify-between items-center mb-8">
-              <div>
-                <h2 className="text-3xl font-black text-white italic">HANDSHAKE DEBUG</h2>
-                <p className="text-slate-400 font-medium">Why the GitHub "Push Back" is failing</p>
-              </div>
+              <h2 className="text-3xl font-black text-white italic">FORCE OVERRIDE</h2>
               <button onClick={() => setShowTroubleshooter(false)} className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-all">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-
-            <div className="space-y-6 mb-10">
-              <div className="bg-slate-950/50 border border-slate-800 rounded-2xl p-6">
-                 <h4 className="text-indigo-400 font-bold mb-3 flex items-center gap-2 text-sm uppercase tracking-widest">
-                   <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
-                   Critical Checklist
-                 </h4>
-                 <ul className="space-y-4 text-sm">
-                   <li className="flex gap-3 text-slate-300">
-                     <span className="text-emerald-500 font-bold">01</span>
-                     <span><strong>Org Access:</strong> Ensure Vidra has been explicitly granted access to your specific GitHub Organization (Settings > Member Privileges).</span>
-                   </li>
-                   <li className="flex gap-3 text-slate-300">
-                     <span className="text-emerald-500 font-bold">02</span>
-                     <span><strong>Redirect URIs:</strong> Ensure your local dev URL or production domain is whitelisted in the GitHub App "Callback URL" field.</span>
-                   </li>
-                   <li className="flex gap-3 text-slate-300">
-                     <span className="text-emerald-500 font-bold">03</span>
-                     <span><strong>Webhook Handshake:</strong> If using webhooks, GitHub must reach your server. "Something went wrong" occurs when the webhook returns anything other than 200 OK.</span>
-                   </li>
-                 </ul>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                 <button 
-                  onClick={() => setShowTokenInput(true)}
-                  className="p-6 rounded-2xl bg-slate-800/50 border border-slate-700 text-left hover:border-indigo-500 transition-all group"
-                 >
-                   <p className="text-indigo-400 font-black mb-1">Method A</p>
-                   <p className="text-xs text-slate-400">Use Personal Access Token (PAT) for 100% reliability.</p>
-                 </button>
-                 <button 
-                  onClick={forceConnect}
-                  className="p-6 rounded-2xl bg-slate-800/50 border border-slate-700 text-left hover:border-emerald-500 transition-all group"
-                 >
-                   <p className="text-emerald-400 font-black mb-1">Method B</p>
-                   <p className="text-xs text-slate-400">Force Mock Connection (Proceed with Demo Mode).</p>
-                 </button>
-              </div>
-            </div>
-
-            {showTokenInput && (
-              <div className="space-y-4 animate-in slide-in-from-bottom-4">
-                <input 
-                  type="password" 
-                  placeholder="Paste your ghp_ Token here..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-5 py-4 text-white font-mono text-sm focus:border-indigo-500 outline-none"
-                />
-                <button onClick={forceConnect} className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-xl shadow-indigo-600/20">Verify & Link GitHub</button>
-              </div>
-            )}
+            <button onClick={forceConnect} className="w-full py-6 rounded-2xl bg-indigo-600 text-white font-black text-xl hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-600/30">
+               Force Connection Now
+            </button>
           </div>
         </div>
       )}

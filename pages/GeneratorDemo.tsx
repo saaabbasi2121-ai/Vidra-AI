@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
-import { GeminiService } from '../services/geminiService';
-import { ExportService } from '../services/exportService';
-import { GitHubService } from '../services/githubService';
-import { ICONS } from '../constants';
+import { GeminiService } from '../services/geminiService.ts';
+import { ExportService } from '../services/exportService.ts';
+import { GitHubService } from '../services/githubService.ts';
+import { ICONS } from '../constants.tsx';
 import { Link } from 'react-router-dom';
 
 const GeneratorDemo: React.FC = () => {
