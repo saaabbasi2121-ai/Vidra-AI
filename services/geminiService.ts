@@ -20,44 +20,47 @@ export class GeminiService {
   static async generateScript(topic: string, description: string, tone: string, style: string, durationSeconds: number = 60) {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    // Calculate required scene count to hit duration (average 10-12s per scene)
-    const sceneCount = Math.max(4, Math.ceil(durationSeconds / 10));
-    // Average speaking speed: 150 words per minute. 60s = 150 words.
-    const targetWordCount = Math.floor((durationSeconds / 60) * 150);
+    // For 60s, we need about 6-8 scenes to keep the viewer engaged.
+    const sceneCount = Math.max(6, Math.ceil(durationSeconds / 8));
+    const targetWordCount = Math.floor((durationSeconds / 60) * 160);
 
     const prompt = `
-      You are an expert viral content creator for TikTok and YouTube Shorts.
-      Generate a script for a new video series.
-
-      SERIES TITLE: ${topic}
-      USER-DEFINED GENRE/DESCRIPTION: "${description}"
+      CRITICAL INSTRUCTION: You are a world-class viral content creator. 
+      Generate a script for a video series.
+      
+      SERIES TOPIC: ${topic}
+      USER'S SPECIFIC DESCRIPTION: "${description}"
       TONE: ${tone}
-      VISUAL ART STYLE: ${style}
-      TARGET DURATION: ${durationSeconds} seconds
-      TOTAL WORD COUNT REQUIRED: Approx ${targetWordCount} words
+      ART STYLE: ${style}
+      TOTAL VIDEO DURATION TARGET: ${durationSeconds} SECONDS
 
-      STRICT CONSTRAINTS:
-      1. IGNORE DEFAULT KNOWLEDGE. DO NOT generate space facts or general science unless the DESCRIPTION explicitly asks for them.
-      2. FOLLOW THE DESCRIPTION EXACTLY. If the user says "Motivational quotes", write 100% motivational content.
-      3. SCENE COUNT: You MUST return EXACTLY ${sceneCount} scenes.
-      4. PACING: Each scene's "text" must be long enough to last ~10 seconds when spoken (roughly 25-30 words per scene).
-      5. IMAGE PROMPTS: Make them highly detailed, cinematic, and matched to the ${style} style.
+      STRICT CONTENT RULES:
+      1. IGNORE ALL DEFAULT ASTRONOMY KNOWLEDGE. 
+      2. If the USER'S DESCRIPTION is "Motivational quotes", you MUST ONLY generate motivational quotes.
+      3. DO NOT return content about Space, Black Holes, or Stars unless explicitly mentioned in the DESCRIPTION.
+      4. SCENE COUNT: Return EXACTLY ${sceneCount} scenes.
+      5. SCENE LENGTH: To reach the ${durationSeconds}s target, EACH scene's "text" MUST be at least 25-30 words long.
+      6. TOTAL WORDS: The sum of all scene text should be roughly ${targetWordCount} words.
 
-      JSON STRUCTURE REQUIRED:
+      JSON FORMAT ONLY:
       {
-        "title": "Unique viral title",
-        "hook": "Aggressive 3-second opening hook",
+        "title": "Viral Title",
+        "hook": "Aggressive opening hook",
         "scenes": [
-          { "text": "Scene narration text (30 words)", "imagePrompt": "Detailed cinematic prompt for AI image gen" }
+          { 
+            "text": "A long paragraph of narration text (approx 30 words) that matches the user's description and tone perfectly.", 
+            "imagePrompt": "A highly detailed, cinematic image prompt for an AI generator matching the ${style} style and scene context." 
+          }
         ],
-        "callToAction": "Niche-specific outro"
+        "callToAction": "Engaging outro"
       }
     `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // Upgrade to Pro for better instruction following
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
+        thinkingConfig: { thinkingBudget: 4000 },
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -82,25 +85,30 @@ export class GeminiService {
       }
     });
 
-    return JSON.parse(response.text || '{}');
+    const parsed = JSON.parse(response.text || '{}');
+    return parsed;
   }
 
   static async generateImage(prompt: string) {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: {
-        parts: [{ text: `Vertical 9:16 high-quality cinematic masterpiece. ${prompt}. Professional photography, 8k, detailed textures, volumetric lighting.` }]
-      },
-      config: {
-        imageConfig: { aspectRatio: "9:16" }
-      }
-    });
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+          parts: [{ text: `A high-quality 9:16 vertical cinematic masterpiece: ${prompt}. Cinematic lighting, detailed textures, 8k resolution.` }]
+        },
+        config: {
+          imageConfig: { aspectRatio: "9:16" }
+        }
+      });
 
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
+      for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
       }
+    } catch (e) {
+      console.error("Image generation failed", e);
     }
     return null;
   }
@@ -113,7 +121,7 @@ export class GeminiService {
       const imageUrl = await this.generateImage(scene.imagePrompt);
       scenesWithImages.push({
         ...scene,
-        imageUrl: imageUrl || 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=800'
+        imageUrl: imageUrl || 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=800' // Neutral abstract grey/blue
       });
     }
 

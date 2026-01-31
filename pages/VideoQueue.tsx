@@ -5,7 +5,7 @@ import { GeneratedVideo, VideoPlatform, VideoSeries, VoiceOption } from '../type
 import { ICONS } from '../constants';
 import { ExportService } from '../services/exportService';
 import { GeminiService } from '../services/geminiService';
-import { VoiceService } from '../services/voiceService';
+import { VoiceService, decodeBase64ToUint8, decodeAudioData } from '../services/voiceService';
 
 const VideoQueue: React.FC = () => {
   const [selectedVideo, setSelectedVideo] = useState<GeneratedVideo | null>(null);
@@ -21,7 +21,9 @@ const VideoQueue: React.FC = () => {
   
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -32,6 +34,8 @@ const VideoQueue: React.FC = () => {
     if (savedSeries) setSeriesList(JSON.parse(savedSeries));
     
     VoiceService.getVoices().then(setAvailableVoices);
+
+    return () => stopAudio();
   }, []);
 
   const saveQueue = (newQueue: GeneratedVideo[]) => {
@@ -40,9 +44,11 @@ const VideoQueue: React.FC = () => {
   };
 
   const stopAudio = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
+    if (currentSourceRef.current) {
+      try {
+        currentSourceRef.current.stop();
+      } catch (e) {}
+      currentSourceRef.current = null;
     }
     setIsPlayingAll(false);
   };
@@ -58,50 +64,49 @@ const VideoQueue: React.FC = () => {
 
     setPreviewStep(index);
     
-    // Check if we already have the audio URL in state
-    let audioUrl = scene.audioUrl;
-    
-    if (!audioUrl && video.voiceId) {
-      setIsAudioLoading(true);
-      try {
-        audioUrl = await VoiceService.generateAudio(scene.text, video.voiceId);
-        if (audioUrl) {
-          // Cache the audio URL back to the scene
-          const updatedScenes = [...video.scenes];
-          updatedScenes[index] = { ...scene, audioUrl };
-          const updatedVideo = { ...video, scenes: updatedScenes };
-          const newQueue = queue.map(v => v.id === video.id ? updatedVideo : v);
-          saveQueue(newQueue);
-          setSelectedVideo(updatedVideo);
-        }
-      } catch (err) {
-        console.error("Audio generation error", err);
-      } finally {
-        setIsAudioLoading(false);
+    setIsAudioLoading(true);
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
       }
-    }
+      const ctx = audioContextRef.current;
+      if (ctx.state === 'suspended') await ctx.resume();
 
-    if (audioUrl) {
-      if (!audioRef.current) audioRef.current = new Audio();
-      audioRef.current.src = audioUrl;
-      audioRef.current.play().catch(e => console.warn("Autoplay blocked or failed", e));
-      
-      audioRef.current.onended = () => {
-        if (chainPlay && index < video.scenes.length - 1) {
-          playSceneAudio(video, index + 1, true);
-        } else {
-          setIsPlayingAll(false);
-        }
-      };
-    } else {
-      // Fallback timer if TTS is completely unavailable
-      setTimeout(() => {
-        if (chainPlay && index < video.scenes.length - 1) {
-          playSceneAudio(video, index + 1, true);
-        } else {
-          setIsPlayingAll(false);
-        }
-      }, 5000);
+      const voiceId = video.voiceId || 'Charon';
+      const base64Audio = await VoiceService.generateGeminiTTS(scene.text, voiceId);
+
+      if (base64Audio) {
+        const uint8 = decodeBase64ToUint8(base64Audio);
+        const buffer = await decodeAudioData(uint8, ctx, 24000, 1);
+        
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        currentSourceRef.current = source;
+        
+        source.onended = () => {
+          if (chainPlay && index < video.scenes.length - 1) {
+            playSceneAudio(video, index + 1, true);
+          } else {
+            setIsPlayingAll(false);
+          }
+        };
+        
+        source.start();
+      } else {
+        setTimeout(() => {
+          if (chainPlay && index < video.scenes.length - 1) {
+            playSceneAudio(video, index + 1, true);
+          } else {
+            setIsPlayingAll(false);
+          }
+        }, 5000);
+      }
+    } catch (err) {
+      console.error("Playback error", err);
+      setIsPlayingAll(false);
+    } finally {
+      setIsAudioLoading(false);
     }
   };
 
@@ -203,7 +208,7 @@ const VideoQueue: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-white">Vidra Video Hub</h1>
-          <p className="text-slate-400">Preview, edit, and post your unique automated content.</p>
+          <p className="text-slate-400">Preview and manage your automated content pool.</p>
         </div>
         <button 
           onClick={() => setShowUploadModal(true)}
@@ -268,7 +273,7 @@ const VideoQueue: React.FC = () => {
                         {video.source === 'Manual' ? 'Manual Upload' : (seriesList.find(s => s.id === video.seriesId)?.topic || 'Direct Lab')}
                       </p>
                       <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">
-                        {video.durationSeconds || 'Auto'}s • {video.voiceId ? (availableVoices.find(v => v.id === video.voiceId)?.name) : 'Native Audio'}
+                        {video.durationSeconds || 'Auto'}s • {video.voiceId ? (availableVoices.find(v => v.id === video.voiceId)?.name || video.voiceId) : 'Native Audio'}
                       </p>
                     </div>
                   </td>
@@ -291,13 +296,14 @@ const VideoQueue: React.FC = () => {
         </div>
       </div>
       
+      {/* Upload Modal */}
       {showUploadModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in duration-300">
           <div className="bg-slate-900 border border-slate-800 rounded-[3rem] w-full max-w-xl p-10 lg:p-12 shadow-2xl relative overflow-hidden">
              <div className="absolute top-0 left-0 w-full h-1.5 bg-emerald-500"></div>
              
              <div className="flex justify-between items-center mb-10">
-                <h2 className="text-3xl font-black text-white">Upload Manual Content</h2>
+                <h2 className="text-3xl font-black text-white">Direct Upload</h2>
                 <button onClick={() => setShowUploadModal(false)} className="w-12 h-12 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
                 </button>
@@ -306,16 +312,16 @@ const VideoQueue: React.FC = () => {
              <form onSubmit={handleManualUpload} className="space-y-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Video Title</label>
-                  <input name="title" required type="text" placeholder="Viral Hook Title..." className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-500 transition-all shadow-inner font-bold" />
+                  <input name="title" required type="text" placeholder="e.g. My Manual Masterpiece" className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-500 transition-all shadow-inner font-bold" />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Description / Script</label>
-                  <textarea name="script" placeholder="Enter video caption or script..." className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-500 transition-all shadow-inner h-24 resize-none" />
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Script / Description</label>
+                  <textarea name="script" placeholder="Enter caption..." className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-emerald-500 transition-all shadow-inner h-24 resize-none" />
                 </div>
 
                 <div className="space-y-2">
-                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Select MP4/MOV File</label>
+                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Video Source File</label>
                    <div className="relative group">
                       <input 
                         type="file" 
@@ -333,7 +339,7 @@ const VideoQueue: React.FC = () => {
                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-slate-600 group-hover:text-emerald-500">
                            <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
                          </svg>
-                         <span className="text-xs font-bold text-slate-500 group-hover:text-slate-300">Click to choose video file</span>
+                         <span className="text-xs font-bold text-slate-500 group-hover:text-slate-300">Choose MP4 or MOV</span>
                       </button>
                    </div>
                 </div>
@@ -342,7 +348,7 @@ const VideoQueue: React.FC = () => {
                   disabled={isUploading}
                   className="w-full py-6 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-lg rounded-2xl transition-all shadow-xl shadow-emerald-600/30 active:scale-[0.98] disabled:opacity-50"
                 >
-                  {isUploading ? "Transcoding Assets..." : "Add to Vault"}
+                  {isUploading ? "Processing..." : "Add to Vault"}
                 </button>
              </form>
           </div>
@@ -360,7 +366,7 @@ const VideoQueue: React.FC = () => {
                {isRegenerating ? (
                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 text-center p-6 space-y-4">
                     <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
-                    <p className="text-indigo-400 text-xs font-black uppercase tracking-widest">Applying Genre Intelligence...</p>
+                    <p className="text-indigo-400 text-xs font-black uppercase tracking-widest text-balance">Orchestrating AI Assets...</p>
                  </div>
                ) : (
                  <div className="absolute inset-0 transition-all duration-1000">
@@ -386,7 +392,7 @@ const VideoQueue: React.FC = () => {
                  <div className="absolute inset-0 p-6 flex flex-col justify-between pointer-events-none">
                     <div className="flex justify-between items-center bg-white/5 backdrop-blur-md p-2 rounded-2xl border border-white/10">
                        <span className="text-[9px] font-black text-white/60 tracking-[0.2em] uppercase">
-                         {selectedVideo.durationSeconds || 60}s • {availableVoices.find(v => v.id === selectedVideo.voiceId)?.name || 'Narrator'}
+                         {selectedVideo.durationSeconds || 60}s • {availableVoices.find(v => v.id === selectedVideo.voiceId)?.name || selectedVideo.voiceId}
                        </span>
                        {isAudioLoading && <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping"></div>}
                     </div>
@@ -412,7 +418,7 @@ const VideoQueue: React.FC = () => {
                     <h2 className="text-4xl font-black text-white mb-3 leading-tight tracking-tight">{selectedVideo.title}</h2>
                     <div className="flex items-center gap-4">
                        <span className={`px-3 py-1 ${selectedVideo.source === 'Manual' ? 'bg-emerald-600/20 text-emerald-400' : 'bg-indigo-600/20 text-indigo-400'} rounded-lg text-xs font-black border border-current opacity-60`}>
-                         {selectedVideo.source === 'Manual' ? 'Direct Import' : 'AI Rendered'}
+                         {selectedVideo.source === 'Manual' ? 'Direct Import' : 'AI Engine'}
                        </span>
                        <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">{selectedVideo.durationSeconds || 'Auto'} Duration</span>
                     </div>
@@ -420,14 +426,14 @@ const VideoQueue: React.FC = () => {
                   {!selectedVideo.videoUrl && (
                     <button onClick={handlePlayAll} disabled={isPlayingAll || isAudioLoading} className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-2xl shadow-xl shadow-indigo-600/20 disabled:opacity-50 transition-all group">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clipRule="evenodd" /></svg>
-                      {isPlayingAll ? 'Playing...' : 'Play Full Video'}
+                      {isPlayingAll ? 'Playing Voiceover...' : 'Play Full Series'}
                     </button>
                   )}
                </div>
 
                {selectedVideo.source === 'Manual' ? (
                  <div className="bg-slate-950/50 border border-slate-800 rounded-[2rem] p-8">
-                   <h4 className="text-slate-500 font-black uppercase tracking-[0.2em] text-[10px] mb-4">Original Script / Caption</h4>
+                   <h4 className="text-slate-500 font-black uppercase tracking-[0.2em] text-[10px] mb-4">Native Script / Caption</h4>
                    <p className="text-slate-300 leading-relaxed italic">"{selectedVideo.script}"</p>
                  </div>
                ) : (
@@ -454,7 +460,7 @@ const VideoQueue: React.FC = () => {
                       className={`flex items-center justify-center gap-3 py-5 bg-slate-800 hover:bg-slate-700 text-white font-black rounded-2xl transition-all border border-slate-700 active:scale-95 disabled:opacity-50 ${selectedVideo.source === 'Manual' ? 'cursor-not-allowed grayscale' : ''}`}
                     >
                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-5 h-5 ${isRegenerating ? 'animate-spin' : ''}`}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
-                       Apply Unique Context
+                       Re-Sync AI Logic
                     </button>
                     <button onClick={() => handleDownload(selectedVideo)} className="flex items-center justify-center gap-3 py-5 bg-white text-slate-900 font-black rounded-2xl hover:bg-slate-100 transition-all shadow-2xl active:scale-95">
                        Download Bundle
