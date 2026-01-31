@@ -15,7 +15,7 @@ const SeriesManagement: React.FC = () => {
   const [availableVoices, setAvailableVoices] = useState<VoiceOption[]>([]);
   const [seriesToDelete, setSeriesToDelete] = useState<VideoSeries | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [apiKeyReady, setApiKeyReady] = useState(!!process.env.API_KEY);
+  const [apiKeyReady, setApiKeyReady] = useState(false);
   
   const [selectedNiche, setSelectedNiche] = useState<NicheCategory | null>(null);
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -34,13 +34,19 @@ const SeriesManagement: React.FC = () => {
     }
     VoiceService.getVoices().then(setAvailableVoices);
 
-    const checkInitialKey = async () => {
+    const checkKeyStatus = async () => {
       if (typeof window.aistudio !== 'undefined') {
         const has = await window.aistudio.hasSelectedApiKey();
         setApiKeyReady(has || !!process.env.API_KEY);
+      } else {
+        setApiKeyReady(!!process.env.API_KEY);
       }
     };
-    checkInitialKey();
+
+    checkKeyStatus();
+    // Re-check on window focus to catch external key selections
+    window.addEventListener('focus', checkKeyStatus);
+    return () => window.removeEventListener('focus', checkKeyStatus);
   }, []);
 
   const [formData, setFormData] = useState({
@@ -60,11 +66,10 @@ const SeriesManagement: React.FC = () => {
     if (typeof window.aistudio !== 'undefined') {
       try {
         await window.aistudio.openSelectKey();
-        setApiKeyReady(true); // Assume success per instructions to mitigate race conditions
+        setApiKeyReady(true); // Assume success per instructions
         return true;
       } catch (e) {
         console.error("Key selection failed", e);
-        return false;
       }
     }
     return false;
@@ -82,17 +87,11 @@ const SeriesManagement: React.FC = () => {
   };
 
   const handlePreviewVoice = async (vId: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // Don't trigger selection when clicking preview
+    e.stopPropagation();
     
     if (previewingVoiceId === vId) {
       stopAudio();
       return;
-    }
-
-    // Check key before previewing
-    if (!apiKeyReady && !process.env.API_KEY) {
-      const selected = await handleKeySelection();
-      if (!selected) return;
     }
 
     setPreviewingVoiceId(vId);
@@ -122,7 +121,7 @@ const SeriesManagement: React.FC = () => {
       }
     } catch (err: any) { 
       console.error("Preview failed", err);
-      if (err.message?.includes("Requested entity was not found") || err.message?.includes("API key")) {
+      if (err.message?.includes("API key") || err.message?.includes("403") || err.message?.includes("not found")) {
         await handleKeySelection();
       }
       setPreviewingVoiceId(null); 
@@ -146,42 +145,27 @@ const SeriesManagement: React.FC = () => {
     e.preventDefault();
     if (!selectedNiche) return;
     
-    // Always check for API key presence, trigger dialog if missing but DON'T block the button
-    if (!apiKeyReady && !process.env.API_KEY) {
-      const selected = await handleKeySelection();
-      if (!selected) {
-        console.warn("API Key selection was dismissed.");
-        // We continue anyway per "assume success" instructions
-      }
-    }
-
+    // Always attempt to start. If it fails, we catch and prompt for key.
     setIsGenerating(true);
-    setGenProgress("Verifying Pipeline...");
-    
-    // Create fresh instance check
-    const test = await GeminiService.testConnection();
-    if (!test.success) {
-      // Handle the "Requested entity was not found" by prompting for key again
-      if (test.error.includes("entity was not found") || test.error.includes("403") || test.error.includes("key") || test.error.includes("API key")) {
-         await handleKeySelection();
-         setGenProgress("Re-attempting connection...");
-         const secondTest = await GeminiService.testConnection();
-         if (!secondTest.success) {
-           setIsGenerating(false);
-           return;
-         }
-      } else {
-         console.error("Pipeline Error:", test.error);
-         alert(`Pipeline Status: ${test.error}`);
-         setIsGenerating(false);
-         return;
-      }
-    }
+    setGenProgress("Initializing Engine...");
 
-    setGenProgress("Synthesizing Assets...");
-    const newId = Math.random().toString(36).substr(2, 9);
-    
     try {
+      const test = await GeminiService.testConnection();
+      if (!test.success) {
+        // Handle missing key or invalid key
+        if (test.error.includes("entity was not found") || test.error.includes("403") || test.error.includes("API key")) {
+           await handleKeySelection();
+           setGenProgress("Retrying with new credentials...");
+           const secondTest = await GeminiService.testConnection();
+           if (!secondTest.success) throw new Error(secondTest.error);
+        } else {
+           throw new Error(test.error);
+        }
+      }
+
+      setGenProgress("Synthesizing Series Assets...");
+      const newId = Math.random().toString(36).substr(2, 9);
+      
       const bundle = await GeminiService.generateFullVideoBundle(
         selectedNiche.name, 
         selectedNiche.description, 
@@ -230,17 +214,17 @@ const SeriesManagement: React.FC = () => {
       const existingVideos = JSON.parse(localStorage.getItem('vidra_videos') || '[]');
       localStorage.setItem('vidra_videos', JSON.stringify([newVideo, ...existingVideos]));
 
-      setGenProgress("Success!");
+      setGenProgress("Engine Fired Successfully!");
       setTimeout(() => {
         setIsGenerating(false);
         navigate('/queue');
       }, 1000);
     } catch (err: any) {
-      console.error("Critical Failure:", err);
-      if (err.message?.includes("API key") || err.message?.includes("Requested entity was not found")) {
+      console.error("Launch Critical Failure:", err);
+      if (err.message?.includes("API key") || err.message?.includes("not found")) {
          await handleKeySelection();
       } else {
-         alert(`Generation Failure: ${err.message || "Unknown error occurred."}`);
+         alert(`Launch Interrupted: ${err.message || "Unknown error occurred."}`);
       }
       setIsGenerating(false);
     }
@@ -265,15 +249,15 @@ const SeriesManagement: React.FC = () => {
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z" /></svg>
             </div>
             <div>
-              <p className="text-white font-black text-sm uppercase tracking-tight">API Key Selection</p>
-              <p className="text-slate-400 text-xs font-medium">Connect a paid GCP project key to enable high-speed visual synthesis.</p>
+              <p className="text-white font-black text-sm uppercase tracking-tight">API Key Required</p>
+              <p className="text-slate-400 text-xs font-medium">Please connect a paid project key for full video automation.</p>
             </div>
           </div>
           <button 
             onClick={handleKeySelection}
             className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl text-xs transition-all shadow-lg shadow-indigo-600/20 whitespace-nowrap"
           >
-            Manage API Key
+            Connect Key
           </button>
         </div>
       )}
@@ -281,13 +265,13 @@ const SeriesManagement: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h1 className="text-4xl font-black text-white italic tracking-tighter">NICHE EXPLORER</h1>
-          <p className="text-slate-400 font-medium">Select one of our 100 high-viral niches to begin.</p>
+          <p className="text-slate-400 font-medium">Select a category to begin your automation journey.</p>
         </div>
         
         <div className="w-full md:w-96 relative group">
           <input 
             type="text" 
-            placeholder="Search categories..."
+            placeholder="Search niches..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="w-full bg-slate-900 border border-slate-800 rounded-2xl px-12 py-4 text-white font-bold focus:border-indigo-500 transition-all outline-none shadow-inner"
@@ -313,7 +297,7 @@ const SeriesManagement: React.FC = () => {
 
       {series.length > 0 && (
         <div className="pt-12 border-t border-slate-800 space-y-6">
-           <h2 className="text-xl font-black text-white italic">ACTIVE PIPELINES</h2>
+           <h2 className="text-xl font-black text-white italic uppercase tracking-tighter">Current Pipelines</h2>
            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
              {series.map(s => (
                <div key={s.id} className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8 flex flex-col justify-between group relative overflow-hidden shadow-2xl">
@@ -325,7 +309,7 @@ const SeriesManagement: React.FC = () => {
                      </div>
                      <button onClick={() => setSeriesToDelete(s)} className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.34 6.6a1 1 0 0 1-1.18.92l-6.6-.34a1 1 0 0 1-.92-1.18l.34-6.6a1 1 0 0 1 1.18-.92l6.6.34a1 1 0 0 1 .92 1.18ZM9 7h6m-1 0a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2h4Z" /></svg></button>
                   </div>
-                  <Link to="/queue" className="w-full py-4 bg-white text-slate-900 text-center font-black rounded-2xl hover:bg-slate-200 transition-all z-10 shadow-lg">Manage Assets</Link>
+                  <Link to="/queue" className="w-full py-4 bg-white text-slate-900 text-center font-black rounded-2xl hover:bg-slate-200 transition-all z-10 shadow-lg">View Queue</Link>
                </div>
              ))}
            </div>
@@ -339,7 +323,7 @@ const SeriesManagement: React.FC = () => {
                 <div className="py-20 flex flex-col items-center justify-center text-center space-y-8">
                    <div className="w-24 h-24 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
                    <div className="space-y-2">
-                      <h2 className="text-3xl font-black text-white italic tracking-tight uppercase">SYNDICATING CONTENT</h2>
+                      <h2 className="text-3xl font-black text-white italic tracking-tight uppercase">SYNDICATING ASSETS</h2>
                       <p className="text-indigo-400 font-black uppercase tracking-[0.2em] text-xs animate-pulse">{genProgress}</p>
                    </div>
                 </div>
@@ -350,7 +334,7 @@ const SeriesManagement: React.FC = () => {
                        <div className="text-7xl group-hover:scale-110 transition-transform">{selectedNiche.icon}</div>
                        <div>
                           <h2 className="text-5xl font-black text-white tracking-tighter italic uppercase">{selectedNiche.name}</h2>
-                          <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">{selectedNiche.group} Series Settings</p>
+                          <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">{selectedNiche.group} Config</p>
                        </div>
                     </div>
                     <button onClick={() => setShowConfigModal(false)} className="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-all shadow-xl border border-slate-700"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-7 h-7"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg></button>
@@ -359,12 +343,12 @@ const SeriesManagement: React.FC = () => {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
                     <div className="space-y-8">
                        <div className="p-8 bg-slate-950/50 border border-slate-800 rounded-3xl space-y-4 shadow-inner">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Strategy</label>
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Description</label>
                           <p className="text-slate-300 text-sm italic font-medium leading-relaxed">"{selectedNiche.description}"</p>
                        </div>
 
                        <div className="space-y-4">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Target Timeline</label>
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Clip Duration</label>
                           <div className="grid grid-cols-5 gap-2">
                              {[30, 60, 90, 120, 180].map(dur => (
                                <button 
@@ -383,13 +367,13 @@ const SeriesManagement: React.FC = () => {
                         onClick={handleLaunch} 
                         className="w-full py-6 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xl rounded-2xl shadow-xl shadow-indigo-600/30 transition-all active:scale-95"
                       >
-                        {(!apiKeyReady && !process.env.API_KEY) ? 'Connect & Trigger Launch' : 'Trigger Engine Launch'}
+                        Trigger Engine Launch
                       </button>
                     </div>
 
                     <div className="space-y-6">
                        <div className="flex justify-between items-center">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Avatar Selection</label>
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Narrator Choice</label>
                           <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 shadow-inner">
                              <button type="button" onClick={() => setVoiceFilter('Male')} className={`px-4 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${voiceFilter === 'Male' ? 'bg-slate-800 text-white shadow' : 'text-slate-500'}`}>Male</button>
                              <button type="button" onClick={() => setVoiceFilter('Female')} className={`px-4 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${voiceFilter === 'Female' ? 'bg-slate-800 text-white shadow' : 'text-slate-500'}`}>Female</button>
@@ -398,7 +382,7 @@ const SeriesManagement: React.FC = () => {
                        
                        <div className="flex items-center gap-2 px-1">
                           <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></div>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tap Avatar to Preview Tone • Tap Card to Select</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider italic">Tap Avatar for Voice Sample • Tap Card to Select</p>
                        </div>
 
                        <div className="grid grid-cols-2 gap-3 h-[400px] overflow-y-auto pr-2 custom-scrollbar">
@@ -413,7 +397,6 @@ const SeriesManagement: React.FC = () => {
                                  className={`w-12 h-12 rounded-xl bg-slate-800 flex-shrink-0 border border-slate-700 overflow-hidden shadow-lg transition-all duration-300 relative group/avatar ${previewingVoiceId === voice.id ? 'scale-110 border-indigo-500 ring-4 ring-indigo-500/30' : 'hover:scale-105'}`}
                                >
                                   <img src={voice.avatarUrl} alt={voice.name} className={`w-full h-full object-cover transition-opacity ${previewingVoiceId === voice.id ? 'opacity-40' : 'group-hover/avatar:opacity-60'}`} />
-                                  
                                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                     {previewingVoiceId === voice.id ? (
                                       <div className="flex items-end gap-0.5 h-4">
@@ -456,9 +439,10 @@ const SeriesManagement: React.FC = () => {
       {seriesToDelete && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
            <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] w-full max-w-md p-10 text-center shadow-2xl animate-in zoom-in-95">
-              <h2 className="text-2xl font-black text-white mb-8">Delete {seriesToDelete.topic}?</h2>
+              <h2 className="text-2xl font-black text-white mb-8 italic uppercase tracking-tighter">Discard Series?</h2>
+              <p className="text-slate-400 mb-8 text-sm">All generated episodes for "{seriesToDelete.topic}" will be lost.</p>
               <div className="flex flex-col gap-3">
-                 <button onClick={confirmDeleteSeries} className="w-full py-4 bg-rose-600 text-white font-black rounded-2xl shadow-xl shadow-rose-600/20">Confirm Deletion</button>
+                 <button onClick={confirmDeleteSeries} className="w-full py-4 bg-rose-600 text-white font-black rounded-2xl shadow-xl shadow-rose-600/20">Confirm Discard</button>
                  <button onClick={() => setSeriesToDelete(null)} className="w-full py-4 bg-slate-800 text-slate-400 font-bold rounded-2xl">Cancel</button>
               </div>
            </div>
