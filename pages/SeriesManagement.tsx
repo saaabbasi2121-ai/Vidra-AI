@@ -135,10 +135,25 @@ const SeriesManagement: React.FC = () => {
     setIsGenerating(true);
     setGenProgress("Connecting to Engine...");
     
-    // Check if the API key is active/valid
+    // Safety check for key selection
+    if (typeof window.aistudio !== 'undefined') {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+        setGenProgress("API Key Required...");
+        await window.aistudio.openSelectKey();
+        // Proceeding assuming key was set (race condition rule)
+      }
+    }
+
+    // Double check connection
     const test = await GeminiService.testConnection();
     if (!test.success) {
-      alert(`API Key Status: ${test.error}. Please ensure you have the API_KEY set in your deployment environment.`);
+      if (typeof window.aistudio !== 'undefined' && (test.error.includes("key") || test.error.includes("403"))) {
+         alert("API Key invalid or missing. Please select a valid key from a paid GCP project.");
+         await window.aistudio.openSelectKey();
+      } else {
+         alert(`Pipeline Status: ${test.error}. Ensure API_KEY is set in environment.`);
+      }
       setIsGenerating(false);
       return;
     }
@@ -333,8 +348,8 @@ const SeriesManagement: React.FC = () => {
                        </div>
                        
                        <div className="flex items-center gap-2 px-1">
-                          <div className="w-1 h-1 bg-indigo-500 rounded-full"></div>
-                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Tap to Preview • Double Tap/Hold to Lock-In</p>
+                          <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></div>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tap to Preview Tone • Double Tap/Hold to Select</p>
                        </div>
 
                        <div className="grid grid-cols-2 gap-3 h-[400px] overflow-y-auto pr-2 custom-scrollbar">
@@ -346,9 +361,9 @@ const SeriesManagement: React.FC = () => {
                               onPointerDown={() => onVoicePointerDown(voice.id)}
                               onPointerUp={onVoicePointerUp}
                               onPointerLeave={onVoicePointerUp}
-                              className={`p-4 rounded-3xl border transition-all text-left flex gap-4 items-center group relative cursor-pointer select-none ${formData.voiceId === voice.id ? 'bg-indigo-600/20 border-indigo-500 shadow-[0_10px_30px_rgba(99,102,241,0.1)]' : 'bg-slate-950 border-slate-800 hover:border-slate-700 shadow-inner'}`}
+                              className={`p-4 rounded-3xl border transition-all text-left flex gap-4 items-center group relative cursor-pointer select-none ${formData.voiceId === voice.id ? 'bg-indigo-600/20 border-indigo-500 shadow-[0_10px_30px_rgba(99,102,241,0.15)]' : 'bg-slate-950 border-slate-800 hover:border-slate-700 shadow-inner'}`}
                             >
-                               <div className={`w-12 h-12 rounded-xl bg-slate-800 flex-shrink-0 border border-slate-700 overflow-hidden shadow-lg transition-all duration-300 ${previewingVoiceId === voice.id ? 'animate-pulse scale-110 border-indigo-500 ring-4 ring-indigo-500/20' : ''}`}>
+                               <div className={`w-12 h-12 rounded-xl bg-slate-800 flex-shrink-0 border border-slate-700 overflow-hidden shadow-lg transition-all duration-300 ${previewingVoiceId === voice.id ? 'scale-110 border-indigo-500 ring-4 ring-indigo-500/20' : ''}`}>
                                   <img src={voice.avatarUrl} alt={voice.name} className="w-full h-full object-cover" />
                                </div>
                                <div>
@@ -357,11 +372,11 @@ const SeriesManagement: React.FC = () => {
                                </div>
                                {formData.voiceId === voice.id && (
                                  <div className="absolute right-4 top-1/2 -translate-y-1/2 bg-indigo-500 rounded-full p-1.5 shadow-xl animate-in zoom-in-50">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 text-white"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" /></svg>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-white"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" /></svg>
                                  </div>
                                )}
                                {previewingVoiceId === voice.id && (
-                                 <div className="absolute left-0 bottom-0 w-full h-1.5 bg-indigo-500 overflow-hidden rounded-b-3xl">
+                                 <div className="absolute left-0 bottom-0 w-full h-1.5 bg-indigo-600 overflow-hidden rounded-b-3xl">
                                     <div className="h-full bg-white/50 animate-[voice-load_1.5s_linear_infinite]" style={{ width: '40%' }}></div>
                                  </div>
                                )}

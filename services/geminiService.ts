@@ -5,7 +5,7 @@ export class GeminiService {
   
   static async testConnection() {
     try {
-      // Direct initialization inside the call as per guidelines
+      // Re-initialize with the latest process.env.API_KEY
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
