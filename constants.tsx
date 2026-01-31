@@ -10,55 +10,61 @@ export const COLORS = {
   background: '#0f172a'
 };
 
-export const NICHE_CATEGORIES: NicheCategory[] = [
-  // Mindset
+const BASE_NICHES: NicheCategory[] = [
+  // Mindset & Psychology
   { id: 'stoic-wisdom', name: 'Stoic Wisdom', group: 'Mindset', icon: '🏛️', tone: 'Calm & Profound', style: 'Moody Cinematic Photography', description: 'Ancient lessons from Marcus Aurelius focused on mental resilience.', suggestedVoiceId: 'charon' },
-  { id: 'daily-motivation', name: 'Daily Motivation', group: 'Mindset', icon: '🔥', tone: 'High-Energy', style: 'Urban Gritty Photography', description: 'Aggressive success-oriented motivation for athletes.', suggestedVoiceId: 'puck' },
-  { id: 'growth-mindset', name: 'Growth Lab', group: 'Mindset', icon: '🌱', tone: 'Inspirational', style: 'Clean Minimalist 3D', description: 'Psychology-backed tips on habit formation.', suggestedVoiceId: 'zephyr' },
-  { id: 'morning-routines', name: 'Elite Mornings', group: 'Mindset', icon: '🌅', tone: 'Productive', style: 'Soft Aesthetic Morning Light', description: 'Strategies for winning the morning.', suggestedVoiceId: 'kore' },
+  { id: 'dark-psychology', name: 'Dark Psychology', group: 'Mindset', icon: '🧠', tone: 'Mysterious', style: 'High Contrast Noir', description: 'Exploring the hidden tactics of human behavior and manipulation.', suggestedVoiceId: 'fenrir' },
+  { id: 'daily-motivation', name: 'Elite Motivation', group: 'Mindset', icon: '🔥', tone: 'High-Energy', style: 'Urban Gritty Photography', description: 'Aggressive success-oriented motivation for peak performance.', suggestedVoiceId: 'puck' },
+  { id: 'growth-mindset', name: 'Habit Lab', group: 'Mindset', icon: '🌱', tone: 'Inspirational', style: 'Clean Minimalist 3D', description: 'Science-backed tips on learning and habit formation.', suggestedVoiceId: 'zephyr' },
+  { id: 'morning-zen', name: 'Morning Zen', group: 'Mindset', icon: '🌅', tone: 'Serene', style: 'Soft Aesthetic Landscapes', description: 'Mindful starts and breathing exercises for focus.', suggestedVoiceId: 'kore' },
   
-  // Finance
-  { id: 'crypto-updates', name: 'Crypto Pulse', group: 'Finance', icon: '₿', tone: 'Urgent & Hype', style: 'Cyberpunk Neon Digital Art', description: 'Fast-paced Bitcoin and Altcoin trends.', suggestedVoiceId: 'puck' },
-  { id: 'passive-income', name: 'Wealth Engine', group: 'Finance', icon: '💸', tone: 'Optimistic', style: 'Luxury Lifestyle Photography', description: 'Side hustles and automated income stream ideas.', suggestedVoiceId: 'zephyr' },
-  { id: 'stock-secrets', name: 'Stock Secrets', group: 'Finance', icon: '📈', tone: 'Educational', style: 'Corporate Professional Photography', description: 'Market concepts and long-term investing.', suggestedVoiceId: 'kore' },
+  // Finance & Business
+  { id: 'crypto-pulse', name: 'Crypto Pulse', group: 'Finance', icon: '₿', tone: 'Urgent & Hype', style: 'Cyberpunk Neon Digital Art', description: 'Fast-paced Bitcoin and Altcoin trends and market shifts.', suggestedVoiceId: 'puck' },
+  { id: 'wealth-engine', name: 'Passive Wealth', group: 'Finance', icon: '💸', tone: 'Optimistic', style: 'Luxury Lifestyle Photography', description: 'Side hustles and automated income stream blueprints.', suggestedVoiceId: 'zephyr' },
+  { id: 'stock-secrets', name: 'Stock Secrets', group: 'Finance', icon: '📈', tone: 'Educational', style: 'Corporate Professional', description: 'Simplifying market concepts for long-term investing.', suggestedVoiceId: 'james' },
+  { id: 'ecommerce-hacks', name: 'E-com Pro', group: 'Finance', icon: '📦', tone: 'Direct', style: 'Bright Clean Studio', description: 'Dropshipping and Amazon FBA success strategies.', suggestedVoiceId: 'liam' },
   
-  // Trivia
-  { id: 'space-trivia', name: 'Galactic Facts', group: 'Trivia', icon: '🚀', tone: 'Awe-Inspiring', style: 'NASA-style Space Photography', description: 'Mind-blowing facts about the universe.', suggestedVoiceId: 'charon' },
-  { id: 'historical-mysteries', name: 'History Vault', group: 'Trivia', icon: '📜', tone: 'Mysterious', style: 'Vintage Sepia Photography', description: 'Unsolved mysteries and weird historical occurrences.', suggestedVoiceId: 'fenrir' },
-  { id: 'dark-web-stories', name: 'Internet Depths', group: 'Trivia', icon: '🕸️', tone: 'Dark & Suspicious', style: 'Glitchy Digital Art', description: 'The weird and scary side of the internet.', suggestedVoiceId: 'fenrir' },
+  // Trivia & Knowledge
+  { id: 'galactic-facts', name: 'Galactic Facts', group: 'Trivia', icon: '🚀', tone: 'Awe-Inspiring', style: 'NASA-style Deep Space', description: 'Mind-blowing facts about the universe and astronomy.', suggestedVoiceId: 'charon' },
+  { id: 'history-vault', name: 'History Vault', group: 'Trivia', icon: '📜', tone: 'Mysterious', style: 'Vintage Sepia Tint', description: 'Unsolved mysteries and weird historical occurrences.', suggestedVoiceId: 'fenrir' },
+  { id: 'wild-world', name: 'Wild World', group: 'Trivia', icon: '🦁', tone: 'Engaging', style: 'Wildlife Photography', description: 'Crazy behaviors and survival facts of animals.', suggestedVoiceId: 'puck' },
+  { id: 'ocean-depths', name: 'Abyss Stories', group: 'Trivia', icon: '🌊', tone: 'Eerie', style: 'Deep Sea Blue Photography', description: 'Terrifying and beautiful facts about the deep ocean.', suggestedVoiceId: 'charon' },
   
-  // Horror
-  { id: 'scary-stories', name: 'Midnight Tales', group: 'Horror', icon: '👹', tone: 'Chilling', style: 'Dark Gritty Horror Art', description: 'Short horror stories and urban legends.', suggestedVoiceId: 'fenrir' },
-  { id: 'true-crime', name: 'Crime File', group: 'Horror', icon: '⚖️', tone: 'Serious', style: 'Documentary Style Photography', description: 'Breakdowns of famous cases.', suggestedVoiceId: 'charon' },
-  
-  // Tech
-  { id: 'ai-news', name: 'AI Revolution', group: 'Tech', icon: '🤖', tone: 'Visionary', style: 'Sleek Futuristic 3D Rendering', description: 'Daily breakthroughs in ChatGPT and automation.', suggestedVoiceId: 'zephyr' },
-  { id: 'coding-tips', name: 'Code Snippets', group: 'Tech', icon: '💻', tone: 'Helpful', style: 'Matrix-style Digital Art', description: 'Quick programming tricks.', suggestedVoiceId: 'zephyr' },
+  // Horror & Mystery
+  { id: 'scary-tales', name: 'Midnight Tales', group: 'Horror', icon: '👹', tone: 'Chilling', style: 'Dark Gritty Horror Art', description: 'Short horror stories and modern urban legends.', suggestedVoiceId: 'fenrir' },
+  { id: 'crime-file', name: 'True Crime File', group: 'Horror', icon: '⚖️', tone: 'Serious', style: 'Documentary Realism', description: 'Brief breakdowns of cold cases and mysterious crimes.', suggestedVoiceId: 'charon' },
+  { id: 'paranormal', name: 'Glitch in Reality', group: 'Horror', icon: '👻', tone: 'Unsettling', style: 'CCTV Grainy Footage Style', description: 'Stories of supernatural events and parallel realities.', suggestedVoiceId: 'fenrir' },
 
-  // Nature
-  { id: 'wild-facts', name: 'Wild World', group: 'Nature', icon: '🦁', tone: 'Playful', style: 'Wildlife Photography', description: 'Crazy behaviors of animals.', suggestedVoiceId: 'puck' },
+  // Tech & Future
+  { id: 'ai-news', name: 'AI Revolution', group: 'Tech', icon: '🤖', tone: 'Visionary', style: 'Sleek Futuristic 3D', description: 'Daily breakthroughs in ChatGPT, robotics, and automation.', suggestedVoiceId: 'zephyr' },
+  { id: 'gadget-lab', name: 'Gadget Lab', group: 'Tech', icon: '📱', tone: 'Curious', style: 'Macro Product Photography', description: 'Checking out the weirdest and coolest tech gadgets.', suggestedVoiceId: 'liam' },
+  { id: 'code-snippets', name: 'Code Snippets', group: 'Tech', icon: '💻', tone: 'Helpful', style: 'Dark Matrix Coding Art', description: 'Quick programming tricks and dev tips.', suggestedVoiceId: 'sophia' },
 ];
 
-// Fill up to 100 with procedural variety
+// Procedurally generate 100 niches to fill the catalog
+export const NICHE_CATEGORIES: NicheCategory[] = [...BASE_NICHES];
 const groups = ['Mindset', 'Finance', 'Entertainment', 'Tech', 'Lifestyle', 'Trivia', 'Horror', 'Nature'] as const;
+const styles = ['Cinematic Photography', '3D Render', 'Anime Style', 'Vintage Film', 'Vector Art'];
+const voices = ['liam', 'emma', 'james', 'olivia', 'robert', 'ava', 'michael', 'isabella', 'william', 'sophia'];
+
 for (let i = NICHE_CATEGORIES.length; i < 100; i++) {
   const g = groups[i % groups.length];
   NICHE_CATEGORIES.push({
-    id: `niche-gen-${i}`,
-    name: `${g} Insights ${i}`,
-    group: g,
+    id: `niche-auto-${i}`,
+    name: `${g} Explorer ${i}`,
+    group: g as any,
     icon: '✨',
     tone: 'Viral & Engaging',
-    style: 'Cinematic Photography',
-    description: `Automated content series focusing on ${g.toLowerCase()} viral trends.`,
-    suggestedVoiceId: i % 2 === 0 ? 'charon' : 'kore'
+    style: styles[i % styles.length],
+    description: `A unique automated content series focusing on niche ${g.toLowerCase()} viral hooks and trends.`,
+    suggestedVoiceId: voices[i % voices.length]
   });
 }
 
 export const ICONS = {
   Dashboard: (props: any) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25A2.25 2.25 0 0 1 10.5 15.75V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25Z" />
     </svg>
   ),
   Series: (props: any) => (

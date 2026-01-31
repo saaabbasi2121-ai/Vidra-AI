@@ -2,8 +2,6 @@
 import { VoiceOption } from '../types';
 import { GoogleGenAI, Modality } from "@google/genai";
 
-const ELEVENLABS_API_KEY = (process.env as any).ELEVENLABS_API_KEY || '';
-
 // Gemini prebuilt voices: Charon, Puck, Kore, Fenrir, Zephyr
 const GEMINI_VOICE_MAP: Record<string, string> = {
   // Male mappings
