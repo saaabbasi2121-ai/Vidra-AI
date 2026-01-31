@@ -15,7 +15,6 @@ const VideoQueue: React.FC = () => {
   const [seriesList, setSeriesList] = useState<VideoSeries[]>([]);
   const [availableVoices, setAvailableVoices] = useState<VoiceOption[]>([]);
   
-  // New State for Uploads
   const [activeTab, setActiveTab] = useState<'AI' | 'Manual'>('AI');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -49,20 +48,25 @@ const VideoQueue: React.FC = () => {
   };
 
   const playSceneAudio = async (video: GeneratedVideo, index: number, chainPlay: boolean = false) => {
-    if (video.source === 'Manual') return; // Manual videos don't have scenes/TTS usually
+    if (video.source === 'Manual') return;
 
     const scene = video.scenes[index];
-    if (!scene) return;
+    if (!scene) {
+      setIsPlayingAll(false);
+      return;
+    }
 
     setPreviewStep(index);
-    setIsAudioLoading(true);
-
-    try {
-      let audioUrl = scene.audioUrl;
-      
-      if (!audioUrl && video.voiceId) {
-        audioUrl = await VoiceService.generateAudio(scene.text, video.voiceId) || undefined;
+    
+    // Check if we already have the audio URL in state
+    let audioUrl = scene.audioUrl;
+    
+    if (!audioUrl && video.voiceId) {
+      setIsAudioLoading(true);
+      try {
+        audioUrl = await VoiceService.generateAudio(scene.text, video.voiceId);
         if (audioUrl) {
+          // Cache the audio URL back to the scene
           const updatedScenes = [...video.scenes];
           updatedScenes[index] = { ...scene, audioUrl };
           const updatedVideo = { ...video, scenes: updatedScenes };
@@ -70,32 +74,34 @@ const VideoQueue: React.FC = () => {
           saveQueue(newQueue);
           setSelectedVideo(updatedVideo);
         }
+      } catch (err) {
+        console.error("Audio generation error", err);
+      } finally {
+        setIsAudioLoading(false);
       }
+    }
 
-      if (audioUrl) {
-        if (!audioRef.current) audioRef.current = new Audio();
-        audioRef.current.src = audioUrl;
-        audioRef.current.play();
-        audioRef.current.onended = () => {
-          if (chainPlay && index < video.scenes.length - 1) {
-            playSceneAudio(video, index + 1, true);
-          } else {
-            setIsPlayingAll(false);
-          }
-        };
-      } else {
-        setTimeout(() => {
-          if (chainPlay && index < video.scenes.length - 1) {
-            playSceneAudio(video, index + 1, true);
-          } else {
-            setIsPlayingAll(false);
-          }
-        }, 3000);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsAudioLoading(false);
+    if (audioUrl) {
+      if (!audioRef.current) audioRef.current = new Audio();
+      audioRef.current.src = audioUrl;
+      audioRef.current.play().catch(e => console.warn("Autoplay blocked or failed", e));
+      
+      audioRef.current.onended = () => {
+        if (chainPlay && index < video.scenes.length - 1) {
+          playSceneAudio(video, index + 1, true);
+        } else {
+          setIsPlayingAll(false);
+        }
+      };
+    } else {
+      // Fallback timer if TTS is completely unavailable
+      setTimeout(() => {
+        if (chainPlay && index < video.scenes.length - 1) {
+          playSceneAudio(video, index + 1, true);
+        } else {
+          setIsPlayingAll(false);
+        }
+      }, 5000);
     }
   };
 
@@ -154,7 +160,6 @@ const VideoQueue: React.FC = () => {
     ExportService.downloadProject(video, `vidra-${video.id}.json`);
   };
 
-  // Fix: Explicitly cast e.currentTarget to HTMLFormElement for correct access to elements and FormData
   const handleManualUpload = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formElement = e.currentTarget;
@@ -166,15 +171,13 @@ const VideoQueue: React.FC = () => {
     if (!file) return;
 
     setIsUploading(true);
-    
-    // Simulate upload delay
     setTimeout(() => {
       const videoUrl = URL.createObjectURL(file);
       const newVideo: GeneratedVideo = {
         id: Math.random().toString(36).substr(2, 9),
         title,
         script,
-        scenes: [], // Manual videos don't use AI scenes in this workflow
+        scenes: [],
         thumbnailUrl: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?q=80&w=800',
         videoUrl,
         status: 'Ready',
@@ -213,7 +216,6 @@ const VideoQueue: React.FC = () => {
         </button>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-2 p-1.5 bg-slate-900 border border-slate-800 rounded-2xl w-fit">
         <button 
           onClick={() => setActiveTab('AI')}
@@ -289,7 +291,6 @@ const VideoQueue: React.FC = () => {
         </div>
       </div>
       
-      {/* Upload Modal */}
       {showUploadModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in duration-300">
           <div className="bg-slate-900 border border-slate-800 rounded-[3rem] w-full max-w-xl p-10 lg:p-12 shadow-2xl relative overflow-hidden">
@@ -359,7 +360,7 @@ const VideoQueue: React.FC = () => {
                {isRegenerating ? (
                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 text-center p-6 space-y-4">
                     <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
-                    <p className="text-indigo-400 text-xs font-black uppercase tracking-widest">Re-applying Genre Logic...</p>
+                    <p className="text-indigo-400 text-xs font-black uppercase tracking-widest">Applying Genre Intelligence...</p>
                  </div>
                ) : (
                  <div className="absolute inset-0 transition-all duration-1000">
@@ -387,6 +388,7 @@ const VideoQueue: React.FC = () => {
                        <span className="text-[9px] font-black text-white/60 tracking-[0.2em] uppercase">
                          {selectedVideo.durationSeconds || 60}s • {availableVoices.find(v => v.id === selectedVideo.voiceId)?.name || 'Narrator'}
                        </span>
+                       {isAudioLoading && <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping"></div>}
                     </div>
                     <div className="space-y-6 mb-4">
                        {!isRegenerating && (
@@ -399,7 +401,7 @@ const VideoQueue: React.FC = () => {
                )}
                {!selectedVideo.videoUrl && (
                  <div className="absolute bottom-0 left-0 w-full h-1.5 bg-slate-800">
-                    <div className="h-full bg-indigo-500 transition-all duration-[3500ms] linear shadow-[0_0_15px_#6366f1] opacity-100" style={{ width: `${((previewStep + 1) / (selectedVideo.scenes?.length || 1)) * 100}%` }}></div>
+                    <div className="h-full bg-indigo-500 transition-all duration-300 shadow-[0_0_15px_#6366f1] opacity-100" style={{ width: `${((previewStep + 1) / (selectedVideo.scenes?.length || 1)) * 100}%` }}></div>
                  </div>
                )}
             </div>
@@ -418,7 +420,7 @@ const VideoQueue: React.FC = () => {
                   {!selectedVideo.videoUrl && (
                     <button onClick={handlePlayAll} disabled={isPlayingAll || isAudioLoading} className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-2xl shadow-xl shadow-indigo-600/20 disabled:opacity-50 transition-all group">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clipRule="evenodd" /></svg>
-                      Play All
+                      {isPlayingAll ? 'Playing...' : 'Play Full Video'}
                     </button>
                   )}
                </div>
@@ -452,7 +454,7 @@ const VideoQueue: React.FC = () => {
                       className={`flex items-center justify-center gap-3 py-5 bg-slate-800 hover:bg-slate-700 text-white font-black rounded-2xl transition-all border border-slate-700 active:scale-95 disabled:opacity-50 ${selectedVideo.source === 'Manual' ? 'cursor-not-allowed grayscale' : ''}`}
                     >
                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-5 h-5 ${isRegenerating ? 'animate-spin' : ''}`}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
-                       {selectedVideo.source === 'Manual' ? 'Native Content' : 'Apply Unique Context'}
+                       Apply Unique Context
                     </button>
                     <button onClick={() => handleDownload(selectedVideo)} className="flex items-center justify-center gap-3 py-5 bg-white text-slate-900 font-black rounded-2xl hover:bg-slate-100 transition-all shadow-2xl active:scale-95">
                        Download Bundle
