@@ -17,34 +17,33 @@ export class GeminiService {
     }
   }
 
-  static async generateScript(topic: string, description: string, tone: string, style: string, durationSeconds: number = 60, voiceId: string = 'Charon') {
+  static async generateScript(topic: string, description: string, tone: string, style: string, durationSeconds: number = 60, voiceId: string = 'liam') {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    // Calculate scenes for actual coverage. 
-    // Average speaking rate is ~130-150 words per minute.
-    const sceneCount = Math.max(6, Math.ceil(durationSeconds / 8));
-    const targetWordCount = Math.floor((durationSeconds / 60) * 150);
+    // Scale scene count: ~1 scene every 8-10 seconds for good pacing.
+    const sceneCount = Math.max(4, Math.ceil(durationSeconds / 9));
+    const targetWordCount = Math.floor((durationSeconds / 60) * 155); // ~155 words per min
     const randomSeed = Math.random().toString(36).substring(7);
 
     const prompt = `
       CRITICAL SYSTEM OVERRIDE: 
-      You are an expert faceless content strategist. 
+      You are an expert faceless content strategist specialized in automated niche channels.
       
       SERIES CONTEXT:
-      - TOPIC: ${topic}
-      - GENRE/DESCRIPTION: "${description}"
+      - NICHE NAME: ${topic}
+      - NICHE RULES: "${description}"
       - TONE: ${tone}
       - VISUAL STYLE: ${style}
       - TARGET DURATION: ${durationSeconds} SECONDS
-      - SELECTED VOICE: ${voiceId}
-      - RANDOM SEED: ${randomSeed}
+      - SELECTED VOICE AVATAR: ${voiceId}
+      - UNIQUE GENERATION SEED: ${randomSeed}
 
       STRICT CONTENT RULES:
-      1. FORBIDDEN THEMES: Space, Galaxies, Planets, Stars, Black Holes.
+      1. THEMATIC CONSISTENCY: You MUST strictly adhere to the "NICHE RULES".
       2. CONSISTENCY: You MUST define a "characterAnchor". This is a detailed description of the main subject/character that will appear in ALL scenes.
-      3. RHYTHM: The script must be tailored for the ${voiceId} voice. 
+      3. RHYTHM: The script must be tailored for the chosen voice profile.
       4. DURATION COMPLIANCE: Return EXACTLY ${sceneCount} scenes.
-      5. WORD COUNT: Total script length MUST be approximately ${targetWordCount} words. Each scene text should be roughly ${Math.floor(targetWordCount / sceneCount)} words to ensure the video lasts exactly ${durationSeconds} seconds.
+      5. WORD COUNT: Total script length MUST be approximately ${targetWordCount} words to fill the ${durationSeconds}s slot.
 
       JSON STRUCTURE:
       {
@@ -53,7 +52,7 @@ export class GeminiService {
         "hook": "Strong opening hook",
         "scenes": [
           { 
-            "text": "Specific narration text matching the duration requirement...", 
+            "text": "Specific narration text (approx ${Math.floor(targetWordCount / sceneCount)} words per scene)...", 
             "imagePrompt": "Action/setting only. The characterAnchor will be added automatically." 
           }
         ],
@@ -120,7 +119,7 @@ export class GeminiService {
     return null;
   }
 
-  static async generateFullVideoBundle(topic: string, description: string, tone: string, style: string, durationSeconds: number = 60, voiceId: string = 'Charon', onProgress?: (msg: string) => void) {
+  static async generateFullVideoBundle(topic: string, description: string, tone: string, style: string, durationSeconds: number = 60, voiceId: string = 'liam', onProgress?: (msg: string) => void) {
     if (onProgress) onProgress("Developing Unique Script...");
     const script = await this.generateScript(topic, description, tone, style, durationSeconds, voiceId);
     

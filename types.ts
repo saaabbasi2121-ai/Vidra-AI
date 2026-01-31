@@ -15,8 +15,21 @@ export enum SubscriptionPlan {
 export interface VoiceOption {
   id: string;
   name: string;
-  previewUrl?: string;
   provider: 'ElevenLabs' | 'Gemini';
+  gender: 'Male' | 'Female';
+  avatarUrl?: string;
+  description?: string;
+}
+
+export interface NicheCategory {
+  id: string;
+  name: string;
+  description: string;
+  group: 'Mindset' | 'Finance' | 'Entertainment' | 'Tech' | 'Lifestyle' | 'Trivia' | 'Horror' | 'Nature';
+  tone: string;
+  style: string;
+  icon: string;
+  suggestedVoiceId?: string;
 }
 
 export interface SocialAccount {
@@ -29,7 +42,7 @@ export interface SocialAccount {
 export interface VideoSeries {
   id: string;
   topic: string;
-  description: string; // New field for deep context
+  description: string;
   tone: string;
   style: string;
   voiceId: string;
@@ -38,30 +51,28 @@ export interface VideoSeries {
   frequency: 'Daily' | '3x / week' | 'Weekly';
   isActive: boolean;
   createdAt: string;
-  lastGeneration?: string;
+  nicheId?: string;
 }
 
 export interface VideoScene {
   text: string;
   imagePrompt: string;
   imageUrl?: string;
-  audioUrl?: string;
 }
 
 export interface GeneratedVideo {
   id: string;
-  seriesId?: string; // Optional for manual uploads
+  seriesId?: string;
   title: string;
   script: string;
   scenes: VideoScene[];
   thumbnailUrl: string;
-  videoUrl?: string; // For manual uploads
   status: 'Generating' | 'Ready' | 'Posted' | 'Failed';
   scheduledAt: string;
   platforms: VideoPlatform[];
   voiceId?: string;
   durationSeconds?: number;
-  source: 'AI' | 'Manual'; // Differentiate between AI and user-uploaded
+  source: 'AI' | 'Manual';
 }
 
 export interface PlanLimits {

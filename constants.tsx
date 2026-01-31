@@ -1,5 +1,5 @@
 
-import React from 'react';
+import { NicheCategory } from './types';
 
 export const COLORS = {
   primary: '#6366f1',
@@ -9,6 +9,51 @@ export const COLORS = {
   warning: '#f59e0b',
   background: '#0f172a'
 };
+
+export const NICHE_CATEGORIES: NicheCategory[] = [
+  // Mindset
+  { id: 'stoic-wisdom', name: 'Stoic Wisdom', group: 'Mindset', icon: '🏛️', tone: 'Calm & Profound', style: 'Moody Cinematic Photography', description: 'Ancient lessons from Marcus Aurelius focused on mental resilience.', suggestedVoiceId: 'charon' },
+  { id: 'daily-motivation', name: 'Daily Motivation', group: 'Mindset', icon: '🔥', tone: 'High-Energy', style: 'Urban Gritty Photography', description: 'Aggressive success-oriented motivation for athletes.', suggestedVoiceId: 'puck' },
+  { id: 'growth-mindset', name: 'Growth Lab', group: 'Mindset', icon: '🌱', tone: 'Inspirational', style: 'Clean Minimalist 3D', description: 'Psychology-backed tips on habit formation.', suggestedVoiceId: 'zephyr' },
+  { id: 'morning-routines', name: 'Elite Mornings', group: 'Mindset', icon: '🌅', tone: 'Productive', style: 'Soft Aesthetic Morning Light', description: 'Strategies for winning the morning.', suggestedVoiceId: 'kore' },
+  
+  // Finance
+  { id: 'crypto-updates', name: 'Crypto Pulse', group: 'Finance', icon: '₿', tone: 'Urgent & Hype', style: 'Cyberpunk Neon Digital Art', description: 'Fast-paced Bitcoin and Altcoin trends.', suggestedVoiceId: 'puck' },
+  { id: 'passive-income', name: 'Wealth Engine', group: 'Finance', icon: '💸', tone: 'Optimistic', style: 'Luxury Lifestyle Photography', description: 'Side hustles and automated income stream ideas.', suggestedVoiceId: 'zephyr' },
+  { id: 'stock-secrets', name: 'Stock Secrets', group: 'Finance', icon: '📈', tone: 'Educational', style: 'Corporate Professional Photography', description: 'Market concepts and long-term investing.', suggestedVoiceId: 'kore' },
+  
+  // Trivia
+  { id: 'space-trivia', name: 'Galactic Facts', group: 'Trivia', icon: '🚀', tone: 'Awe-Inspiring', style: 'NASA-style Space Photography', description: 'Mind-blowing facts about the universe.', suggestedVoiceId: 'charon' },
+  { id: 'historical-mysteries', name: 'History Vault', group: 'Trivia', icon: '📜', tone: 'Mysterious', style: 'Vintage Sepia Photography', description: 'Unsolved mysteries and weird historical occurrences.', suggestedVoiceId: 'fenrir' },
+  { id: 'dark-web-stories', name: 'Internet Depths', group: 'Trivia', icon: '🕸️', tone: 'Dark & Suspicious', style: 'Glitchy Digital Art', description: 'The weird and scary side of the internet.', suggestedVoiceId: 'fenrir' },
+  
+  // Horror
+  { id: 'scary-stories', name: 'Midnight Tales', group: 'Horror', icon: '👹', tone: 'Chilling', style: 'Dark Gritty Horror Art', description: 'Short horror stories and urban legends.', suggestedVoiceId: 'fenrir' },
+  { id: 'true-crime', name: 'Crime File', group: 'Horror', icon: '⚖️', tone: 'Serious', style: 'Documentary Style Photography', description: 'Breakdowns of famous cases.', suggestedVoiceId: 'charon' },
+  
+  // Tech
+  { id: 'ai-news', name: 'AI Revolution', group: 'Tech', icon: '🤖', tone: 'Visionary', style: 'Sleek Futuristic 3D Rendering', description: 'Daily breakthroughs in ChatGPT and automation.', suggestedVoiceId: 'zephyr' },
+  { id: 'coding-tips', name: 'Code Snippets', group: 'Tech', icon: '💻', tone: 'Helpful', style: 'Matrix-style Digital Art', description: 'Quick programming tricks.', suggestedVoiceId: 'zephyr' },
+
+  // Nature
+  { id: 'wild-facts', name: 'Wild World', group: 'Nature', icon: '🦁', tone: 'Playful', style: 'Wildlife Photography', description: 'Crazy behaviors of animals.', suggestedVoiceId: 'puck' },
+];
+
+// Fill up to 100 with procedural variety
+const groups = ['Mindset', 'Finance', 'Entertainment', 'Tech', 'Lifestyle', 'Trivia', 'Horror', 'Nature'] as const;
+for (let i = NICHE_CATEGORIES.length; i < 100; i++) {
+  const g = groups[i % groups.length];
+  NICHE_CATEGORIES.push({
+    id: `niche-gen-${i}`,
+    name: `${g} Insights ${i}`,
+    group: g,
+    icon: '✨',
+    tone: 'Viral & Engaging',
+    style: 'Cinematic Photography',
+    description: `Automated content series focusing on ${g.toLowerCase()} viral trends.`,
+    suggestedVoiceId: i % 2 === 0 ? 'charon' : 'kore'
+  });
+}
 
 export const ICONS = {
   Dashboard: (props: any) => (

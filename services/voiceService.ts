@@ -4,7 +4,32 @@ import { GoogleGenAI, Modality } from "@google/genai";
 
 const ELEVENLABS_API_KEY = (process.env as any).ELEVENLABS_API_KEY || '';
 
-// Helper for decoding base64 to Uint8Array
+// Gemini prebuilt voices: Charon, Puck, Kore, Fenrir, Zephyr
+const GEMINI_VOICE_MAP: Record<string, string> = {
+  // Male mappings
+  'liam': 'zephyr',
+  'james': 'charon',
+  'robert': 'puck',
+  'michael': 'fenrir',
+  'william': 'zephyr',
+  'david': 'charon',
+  'richard': 'puck',
+  'joseph': 'fenrir',
+  'thomas': 'zephyr',
+  'charles': 'charon',
+  // Female mappings
+  'emma': 'kore',
+  'olivia': 'kore',
+  'ava': 'kore',
+  'isabella': 'kore',
+  'sophia': 'kore',
+  'charlotte': 'kore',
+  'mia': 'kore',
+  'amelia': 'kore',
+  'harper': 'kore',
+  'evelyn': 'kore',
+};
+
 export function decodeBase64ToUint8(base64: string) {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -15,7 +40,6 @@ export function decodeBase64ToUint8(base64: string) {
   return bytes;
 }
 
-// Helper for decoding raw PCM data into an AudioBuffer
 export async function decodeAudioData(
   data: Uint8Array,
   ctx: AudioContext,
@@ -37,36 +61,34 @@ export async function decodeAudioData(
 
 export class VoiceService {
   static async getVoices(): Promise<VoiceOption[]> {
-    const defaultVoices: VoiceOption[] = [
-      { id: 'Charon', name: 'Charon (Deep/Mysterious)', provider: 'Gemini' },
-      { id: 'Puck', name: 'Puck (Energetic)', provider: 'Gemini' },
-      { id: 'Kore', name: 'Kore (Professional)', provider: 'Gemini' },
-      { id: 'Fenrir', name: 'Fenrir (Dark)', provider: 'Gemini' },
-      { id: 'Zephyr', name: 'Zephyr (Smooth)', provider: 'Gemini' },
+    const maleNames = ['Liam', 'James', 'Robert', 'Michael', 'William', 'David', 'Richard', 'Joseph', 'Thomas', 'Charles'];
+    const femaleNames = ['Emma', 'Olivia', 'Ava', 'Isabella', 'Sophia', 'Charlotte', 'Mia', 'Amelia', 'Harper', 'Evelyn'];
+
+    const avatars: VoiceOption[] = [
+      ...maleNames.map(name => ({
+        id: name.toLowerCase(),
+        name: `${name}`,
+        provider: 'Gemini' as const,
+        gender: 'Male' as const,
+        description: 'Deep and resonant male tone.',
+        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}&gender=male`
+      })),
+      ...femaleNames.map(name => ({
+        id: name.toLowerCase(),
+        name: `${name}`,
+        provider: 'Gemini' as const,
+        gender: 'Female' as const,
+        description: 'Soft and articulate female tone.',
+        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}&gender=female`
+      }))
     ];
 
-    if (!ELEVENLABS_API_KEY) return defaultVoices;
-
-    try {
-      const response = await fetch('https://api.elevenlabs.io/v1/voices', {
-        headers: { 'xi-api-key': ELEVENLABS_API_KEY }
-      });
-      const data = await response.json();
-      const elVoices = data.voices.map((v: any) => ({
-        id: v.voice_id,
-        name: `${v.name} (Eleven)`,
-        previewUrl: v.preview_url,
-        provider: 'ElevenLabs'
-      }));
-      return [...defaultVoices, ...elVoices];
-    } catch (err) {
-      console.error("Failed to fetch ElevenLabs voices:", err);
-      return defaultVoices;
-    }
+    return avatars;
   }
 
   static async generateGeminiTTS(text: string, voiceId: string): Promise<string | null> {
     try {
+      const actualVoice = GEMINI_VOICE_MAP[voiceId.toLowerCase()] || 'zephyr';
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
@@ -75,7 +97,7 @@ export class VoiceService {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
             voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: voiceId === 'Rachel (Sweet)' || voiceId.includes('Eleven') ? 'Kore' : voiceId },
+              prebuiltVoiceConfig: { voiceName: actualVoice },
             },
           },
         },

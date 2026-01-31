@@ -2,18 +2,23 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { VideoPlatform, VideoSeries, GeneratedVideo, VoiceOption } from '../types';
+import { VideoPlatform, VideoSeries, GeneratedVideo, VoiceOption, NicheCategory } from '../types';
+import { NICHE_CATEGORIES } from '../constants';
 import { GeminiService } from '../services/geminiService';
 import { VoiceService, decodeBase64ToUint8, decodeAudioData } from '../services/voiceService';
 
 const SeriesManagement: React.FC = () => {
   const navigate = useNavigate();
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [series, setSeries] = useState<VideoSeries[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState("");
   const [availableVoices, setAvailableVoices] = useState<VoiceOption[]>([]);
   const [seriesToDelete, setSeriesToDelete] = useState<VideoSeries | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  const [selectedNiche, setSelectedNiche] = useState<NicheCategory | null>(null);
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [voiceFilter, setVoiceFilter] = useState<'Male' | 'Female'>('Male');
   
   const [isPreviewingVoice, setIsPreviewingVoice] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -22,49 +27,45 @@ const SeriesManagement: React.FC = () => {
     const saved = localStorage.getItem('vidra_series');
     if (saved) {
       setSeries(JSON.parse(saved));
-    } else {
-      const initial: VideoSeries[] = [{
-        id: '1',
-        topic: 'Motivational Quotes',
-        description: 'Powerful quotes about success and perseverance over cinematic landscapes.',
-        tone: 'Inspirational',
-        style: 'Cinematic Photography',
-        voiceId: 'Charon',
-        durationSeconds: 60,
-        platform: VideoPlatform.TIKTOK,
-        frequency: 'Daily',
-        isActive: true,
-        createdAt: '2023-10-01'
-      }];
-      setSeries(initial);
-      localStorage.setItem('vidra_series', JSON.stringify(initial));
     }
     VoiceService.getVoices().then(setAvailableVoices);
   }, []);
 
   const [formData, setFormData] = useState({
-    topic: '',
-    description: '',
-    tone: 'Viral & Engaging',
+    voiceId: 'liam',
+    durationSeconds: 60,
     platform: VideoPlatform.TIKTOK,
-    frequency: 'Daily',
-    style: 'Cinematic Photography',
-    voiceId: 'Charon',
-    durationSeconds: 60
+    frequency: 'Daily'
   });
 
-  const handlePreviewVoice = async () => {
+  const filteredNiches = NICHE_CATEGORIES.filter(n => 
+    n.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    n.group.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    n.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleSelectNiche = (niche: NicheCategory) => {
+    setSelectedNiche(niche);
+    const suggested = availableVoices.find(v => v.id === niche.suggestedVoiceId);
+    setFormData(prev => ({ 
+      ...prev, 
+      voiceId: niche.suggestedVoiceId || (voiceFilter === 'Male' ? 'liam' : 'emma') 
+    }));
+    if (suggested) setVoiceFilter(suggested.gender);
+    setShowConfigModal(true);
+  };
+
+  const handlePreviewVoice = async (vId?: string) => {
+    const targetVoice = vId || formData.voiceId;
     if (isPreviewingVoice) return;
     setIsPreviewingVoice(true);
-    
     try {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
       }
       const ctx = audioContextRef.current;
       if (ctx.state === 'suspended') await ctx.resume();
-
-      const base64Audio = await VoiceService.generateGeminiTTS("Voice engine synchronized.", formData.voiceId);
+      const base64Audio = await VoiceService.generateGeminiTTS("This is how your series will sound.", targetVoice);
       if (base64Audio) {
         const uint8 = decodeBase64ToUint8(base64Audio);
         const buffer = await decodeAudioData(uint8, ctx, 24000, 1);
@@ -73,49 +74,42 @@ const SeriesManagement: React.FC = () => {
         source.connect(ctx.destination);
         source.onended = () => setIsPreviewingVoice(false);
         source.start();
-      } else {
-        setIsPreviewingVoice(false);
-      }
-    } catch (err) {
-      console.error(err);
-      setIsPreviewingVoice(false);
-    }
+      } else { setIsPreviewingVoice(false); }
+    } catch (err) { setIsPreviewingVoice(false); }
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleLaunch = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedNiche) return;
     setIsGenerating(true);
-    setGenProgress("Initializing Series Engine...");
+    setGenProgress("Architecting Your Series...");
     
     const newId = Math.random().toString(36).substr(2, 9);
     
     try {
-      // Step 1: Generate Full Content Bundle (Atomic generation)
-      // Passing both durationSeconds and voiceId correctly now
       const bundle = await GeminiService.generateFullVideoBundle(
-        formData.topic, 
-        formData.description, 
-        formData.tone, 
-        formData.style, 
+        selectedNiche.name, 
+        selectedNiche.description, 
+        selectedNiche.tone, 
+        selectedNiche.style, 
         formData.durationSeconds,
         formData.voiceId,
         (msg) => setGenProgress(msg)
       );
       
-      setGenProgress("Finalizing Data Integration...");
-
       const newSeries: VideoSeries = {
         id: newId,
-        topic: formData.topic,
-        description: formData.description,
-        tone: formData.tone,
+        topic: selectedNiche.name,
+        description: selectedNiche.description,
+        tone: selectedNiche.tone,
         platform: formData.platform,
         frequency: formData.frequency as any,
-        style: formData.style,
+        style: selectedNiche.style,
         voiceId: formData.voiceId,
         durationSeconds: formData.durationSeconds,
         isActive: true,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        nicheId: selectedNiche.id
       };
 
       const newVideo: GeneratedVideo = {
@@ -133,26 +127,19 @@ const SeriesManagement: React.FC = () => {
         source: 'AI'
       };
 
-      // Step 2: Atomic Save to LocalStorage
       const existingSeries = JSON.parse(localStorage.getItem('vidra_series') || '[]');
-      const updatedSeries = [...existingSeries, newSeries];
-      localStorage.setItem('vidra_series', JSON.stringify(updatedSeries));
-      setSeries(updatedSeries);
-
+      localStorage.setItem('vidra_series', JSON.stringify([...existingSeries, newSeries]));
+      
       const existingVideos = JSON.parse(localStorage.getItem('vidra_videos') || '[]');
-      const updatedVideos = [newVideo, ...existingVideos];
-      localStorage.setItem('vidra_videos', JSON.stringify(updatedVideos));
+      localStorage.setItem('vidra_videos', JSON.stringify([newVideo, ...existingVideos]));
 
-      setGenProgress("Success!");
+      setGenProgress("Engine Active!");
       setTimeout(() => {
-        setShowCreateModal(false);
         setIsGenerating(false);
         navigate('/queue');
-      }, 1200);
-
+      }, 1000);
     } catch (err) {
-      console.error("Generation failed", err);
-      alert("Pipeline Error: Failed to generate unique assets. Please try again.");
+      alert("Pipeline Error. Please check API key.");
       setIsGenerating(false);
     }
   };
@@ -162,201 +149,170 @@ const SeriesManagement: React.FC = () => {
     const newSeriesList = series.filter(s => s.id !== seriesToDelete.id);
     setSeries(newSeriesList);
     localStorage.setItem('vidra_series', JSON.stringify(newSeriesList));
-
     const allVideos = JSON.parse(localStorage.getItem('vidra_videos') || '[]');
-    const remainingVideos = allVideos.filter((v: GeneratedVideo) => v.seriesId !== seriesToDelete.id);
-    localStorage.setItem('vidra_videos', JSON.stringify(remainingVideos));
-
+    localStorage.setItem('vidra_videos', JSON.stringify(allVideos.filter(v => v.seriesId !== seriesToDelete.id)));
     setSeriesToDelete(null);
   };
 
   return (
-    <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
-      <div className="flex justify-between items-center">
+    <div className="space-y-12 animate-in slide-in-from-bottom-4 duration-500 pb-20">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
-          <h1 className="text-2xl font-black text-white">Series Lab</h1>
-          <p className="text-slate-400">Manage your automated niche engines</p>
+          <h1 className="text-4xl font-black text-white italic tracking-tighter">NICHE EXPLORER</h1>
+          <p className="text-slate-400 font-medium">Select one of our 100+ high-viral niches to start automation.</p>
         </div>
-        <button 
-          onClick={() => setShowCreateModal(true)}
-          disabled={isGenerating}
-          className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-black rounded-2xl transition-all shadow-xl shadow-indigo-600/20 flex items-center gap-2"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-          New Series Engine
-        </button>
+        
+        <div className="w-full md:w-96 relative group">
+          <input 
+            type="text" 
+            placeholder="Search niches (e.g. Finance, Stoic)..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-900 border border-slate-800 rounded-2xl px-12 py-4 text-white font-bold focus:border-indigo-500 transition-all outline-none"
+          />
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-500 transition-colors"><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {series.map((s) => (
-          <div key={s.id} className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8 hover:border-indigo-500/50 transition-all group relative overflow-hidden flex flex-col h-full shadow-lg">
-            <div className="absolute top-6 right-6 flex gap-2">
-               <button 
-                 onClick={() => setSeriesToDelete(s)}
-                 className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 z-10"
-               >
-                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.34 6.6a1 1 0 0 1-1.18.92l-6.6-.34a1 1 0 0 1-.92-1.18l.34-6.6a1 1 0 0 1 1.18-.92l6.6.34a1 1 0 0 1 .92 1.18ZM9 7h6m-1 0a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2h4Z" /></svg>
-               </button>
-               <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></div>
-            </div>
-            
-            <h3 className="text-2xl font-black text-white mb-2 pr-12">{s.topic}</h3>
-            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-4">{s.style} • {s.tone}</p>
-            
-            <div className="flex-1 bg-slate-950/50 border border-slate-800 rounded-2xl p-4 mb-6">
-               <p className="text-slate-400 text-xs leading-relaxed line-clamp-4 italic">
-                  "{s.description || 'No additional genre context provided.'}"
-               </p>
-            </div>
-            
-            <div className="space-y-3 mb-8">
-              <div className="flex justify-between items-center px-4 py-2 bg-slate-800/30 rounded-xl">
-                <span className="text-[10px] text-slate-500 font-black uppercase">Voice</span>
-                <span className="text-indigo-400 text-xs font-bold truncate">
-                  {availableVoices.find(v => v.id === s.voiceId)?.name || s.voiceId}
-                </span>
-              </div>
-              <div className="flex justify-between items-center px-4 py-2 bg-slate-800/30 rounded-xl">
-                <span className="text-[10px] text-slate-500 font-black uppercase">Duration</span>
-                <span className="text-slate-300 text-xs font-bold">{s.durationSeconds}s</span>
-              </div>
-            </div>
-            
-            <Link 
-              to="/queue" 
-              className="w-full text-center py-4 bg-white text-slate-900 text-sm font-black rounded-2xl transition-all hover:bg-slate-100 active:scale-[0.98]"
-            >
-              Review Pipeline
-            </Link>
-          </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        {filteredNiches.map(niche => (
+          <button 
+            key={niche.id} 
+            onClick={() => handleSelectNiche(niche)}
+            className="bg-slate-900 border border-slate-800 rounded-3xl p-6 text-left hover:border-indigo-500 hover:bg-slate-800/50 transition-all group flex flex-col h-full shadow-lg active:scale-95"
+          >
+            <div className="text-3xl mb-4 group-hover:scale-110 transition-transform">{niche.icon}</div>
+            <h3 className="text-white font-black text-sm mb-2 line-clamp-1">{niche.name}</h3>
+            <p className="text-slate-500 text-[10px] uppercase font-black tracking-widest mb-3">{niche.group}</p>
+            <p className="text-slate-400 text-[11px] leading-relaxed line-clamp-3 italic opacity-60 group-hover:opacity-100 transition-opacity">"{niche.description}"</p>
+          </button>
         ))}
       </div>
 
-      {seriesToDelete && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-           <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] w-full max-w-md p-10 text-center shadow-2xl animate-in zoom-in-95 duration-200">
-              <div className="w-16 h-16 bg-rose-500/20 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
-              </div>
-              <h2 className="text-2xl font-black text-white mb-2">Delete Series?</h2>
-              <p className="text-slate-400 text-sm mb-8">
-                Deleting <span className="text-white font-bold">"{seriesToDelete.topic}"</span> will also remove all its generated episodes.
-              </p>
-              <div className="flex flex-col gap-3">
-                 <button onClick={confirmDeleteSeries} className="w-full py-4 bg-rose-600 hover:bg-rose-500 text-white font-black rounded-2xl transition-all">Yes, Delete All Data</button>
-                 <button onClick={() => setSeriesToDelete(null)} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl transition-all">Cancel</button>
-              </div>
+      {series.length > 0 && (
+        <div className="pt-12 border-t border-slate-800 space-y-6">
+           <h2 className="text-xl font-black text-white">Active Pipelines</h2>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+             {series.map(s => (
+               <div key={s.id} className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8 flex flex-col justify-between group relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+                  <div className="flex justify-between items-start mb-6 z-10">
+                     <div>
+                        <h3 className="text-2xl font-black text-white">{s.topic}</h3>
+                        <p className="text-[10px] text-indigo-400 font-black tracking-widest uppercase">{s.durationSeconds}s • {s.tone}</p>
+                     </div>
+                     <button onClick={() => setSeriesToDelete(s)} className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.34 6.6a1 1 0 0 1-1.18.92l-6.6-.34a1 1 0 0 1-.92-1.18l.34-6.6a1 1 0 0 1 1.18-.92l6.6.34a1 1 0 0 1 .92 1.18ZM9 7h6m-1 0a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2h4Z" /></svg></button>
+                  </div>
+                  <Link to="/queue" className="w-full py-4 bg-white text-slate-900 text-center font-black rounded-2xl hover:bg-slate-200 transition-all z-10">Manage Queue</Link>
+               </div>
+             ))}
            </div>
         </div>
       )}
 
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="bg-slate-900 border border-slate-800 rounded-[3rem] w-full max-w-2xl p-10 lg:p-12 shadow-2xl relative overflow-hidden">
-            {isGenerating ? (
-              <div className="py-20 flex flex-col items-center justify-center text-center space-y-8 animate-in zoom-in-95">
-                 <div className="relative">
-                    <div className="w-24 h-24 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                       <div className="w-12 h-12 bg-indigo-500 rounded-2xl animate-pulse"></div>
-                    </div>
-                 </div>
-                 <div>
-                    <h2 className="text-3xl font-black text-white mb-2">Architecting AI Bundle</h2>
-                    <p className="text-indigo-400 font-black uppercase tracking-[0.2em] text-xs animate-pulse">{genProgress}</p>
-                 </div>
-                 <p className="text-slate-500 text-xs max-w-xs mx-auto italic">"Synchronizing visual character anchors for absolute consistency. This will take ~45 seconds."</p>
-              </div>
-            ) : (
-              <>
-                <div className="flex justify-between items-start mb-10">
-                  <div>
-                    <h2 className="text-3xl font-black text-white leading-tight">Series Architect</h2>
-                    <p className="text-slate-400 text-sm mt-1">Specify your niche details to prevent generic content.</p>
-                  </div>
-                  <button onClick={() => setShowCreateModal(false)} className="w-12 h-12 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-                  </button>
+      {showConfigModal && selectedNiche && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/98 backdrop-blur-2xl animate-in fade-in duration-300">
+           <div className="bg-slate-900 border border-slate-800 rounded-[3rem] w-full max-w-4xl p-10 lg:p-12 shadow-2xl relative overflow-y-auto max-h-[90vh]">
+              {isGenerating ? (
+                <div className="py-20 flex flex-col items-center justify-center text-center space-y-8">
+                   <div className="w-24 h-24 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+                   <div>
+                      <h2 className="text-3xl font-black text-white mb-2 italic tracking-tight uppercase">SYNDICATING ASSETS</h2>
+                      <p className="text-indigo-400 font-black uppercase tracking-[0.2em] text-xs animate-pulse">{genProgress}</p>
+                   </div>
                 </div>
-                
-                <form onSubmit={handleCreate} className="space-y-8">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-1">Engine Name</label>
-                      <input 
-                        type="text" required
-                        placeholder="e.g. Stoic Quotes"
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 text-white focus:border-indigo-500 transition-colors font-bold"
-                        value={formData.topic}
-                        onChange={e => setFormData({...formData, topic: e.target.value})}
-                      />
+              ) : (
+                <div className="space-y-10">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-6">
+                       <div className="text-7xl">{selectedNiche.icon}</div>
+                       <div>
+                          <h2 className="text-5xl font-black text-white tracking-tighter italic uppercase">{selectedNiche.name}</h2>
+                          <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">{selectedNiche.group} Series Configuration</p>
+                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-1">Art Style</label>
-                      <select 
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 text-white font-bold"
-                        value={formData.style}
-                        onChange={e => setFormData({...formData, style: e.target.value})}
-                      >
-                        <option>Cinematic Photography</option>
-                        <option>Cyberpunk / Neon</option>
-                        <option>Minimalist 3D</option>
-                        <option>Anime / Studio Ghibli</option>
-                      </select>
-                    </div>
+                    <button onClick={() => setShowConfigModal(false)} className="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-all"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-7 h-7"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg></button>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-1">Niche Description (Deep Context)</label>
-                    <textarea 
-                      required
-                      placeholder="Describe your subject in detail. E.g. A dark gritty series about ancient samurai wisdom. Character is a scarred samurai. NO SPACE THEMES."
-                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 text-white h-32 resize-none"
-                      value={formData.description}
-                      onChange={e => setFormData({...formData, description: e.target.value})}
-                    />
-                  </div>
+                  <form onSubmit={handleLaunch} className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                    <div className="space-y-8">
+                       <div className="p-8 bg-slate-950/50 border border-slate-800 rounded-3xl space-y-4 shadow-inner">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Niche Strategy</label>
+                          <p className="text-slate-300 text-sm italic font-medium leading-relaxed">"{selectedNiche.description}"</p>
+                          <div className="pt-4 flex gap-2">
+                             <span className="px-3 py-1 bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase rounded-lg border border-indigo-500/20">{selectedNiche.tone}</span>
+                             <span className="px-3 py-1 bg-slate-800 text-slate-400 text-[10px] font-black uppercase rounded-lg border border-slate-700">{selectedNiche.style}</span>
+                          </div>
+                       </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <div className="flex justify-between px-1">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Voice Engine</label>
-                        <button type="button" onClick={handlePreviewVoice} className="text-[9px] text-indigo-400 font-black uppercase hover:text-white">Preview</button>
-                      </div>
-                      <select 
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 text-white font-bold"
-                        value={formData.voiceId}
-                        onChange={e => setFormData({...formData, voiceId: e.target.value})}
-                      >
-                        {availableVoices.map(voice => (
-                          <option key={voice.id} value={voice.id}>{voice.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-1">Video Length</label>
-                      <select 
-                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 text-white font-bold"
-                        value={formData.durationSeconds}
-                        onChange={e => setFormData({...formData, durationSeconds: parseInt(e.target.value)})}
-                      >
-                        <option value={30}>30s</option>
-                        <option value={60}>60s</option>
-                        <option value={120}>120s</option>
-                      </select>
-                    </div>
-                  </div>
+                       <div className="space-y-4">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Episode Duration</label>
+                          <div className="grid grid-cols-5 gap-2">
+                             {[30, 60, 90, 120, 180].map(dur => (
+                               <button 
+                                 key={dur} 
+                                 type="button"
+                                 onClick={() => setFormData({...formData, durationSeconds: dur})}
+                                 className={`py-4 rounded-xl font-black text-xs transition-all border ${formData.durationSeconds === dur ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'}`}
+                               >
+                                 {dur}s
+                               </button>
+                             ))}
+                          </div>
+                       </div>
 
-                  <button 
-                    type="submit"
-                    className="w-full py-6 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-lg rounded-2xl shadow-xl shadow-indigo-600/30 transition-all active:scale-[0.98]"
-                  >
-                    Launch Series Pipeline
-                  </button>
-                </form>
-              </>
-            )}
-          </div>
+                       <button type="submit" className="w-full py-6 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xl rounded-2xl shadow-xl shadow-indigo-600/30 transition-all active:scale-95">Launch Automated Engine</button>
+                    </div>
+
+                    <div className="space-y-6">
+                       <div className="flex justify-between items-center mb-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Select Voice Avatar</label>
+                          <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800">
+                             <button type="button" onClick={() => setVoiceFilter('Male')} className={`px-3 py-1 rounded text-[9px] font-black uppercase transition-all ${voiceFilter === 'Male' ? 'bg-slate-800 text-white' : 'text-slate-500'}`}>Male</button>
+                             <button type="button" onClick={() => setVoiceFilter('Female')} className={`px-3 py-1 rounded text-[9px] font-black uppercase transition-all ${voiceFilter === 'Female' ? 'bg-slate-800 text-white' : 'text-slate-500'}`}>Female</button>
+                          </div>
+                       </div>
+
+                       <div className="grid grid-cols-2 gap-3 h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                          {availableVoices.filter(v => v.gender === voiceFilter).map(voice => (
+                            <button 
+                              key={voice.id} 
+                              type="button"
+                              onClick={() => { setFormData({...formData, voiceId: voice.id}); handlePreviewVoice(voice.id); }}
+                              className={`p-4 rounded-3xl border transition-all text-left flex gap-4 items-center group relative overflow-hidden ${formData.voiceId === voice.id ? 'bg-indigo-600/10 border-indigo-500' : 'bg-slate-950 border-slate-800 hover:border-slate-700'}`}
+                            >
+                               <div className="w-12 h-12 rounded-xl bg-slate-800 flex-shrink-0 border border-slate-700 overflow-hidden shadow-lg group-hover:scale-110 transition-transform">
+                                  <img src={voice.avatarUrl} alt={voice.name} className="w-full h-full object-cover" />
+                               </div>
+                               <div>
+                                  <p className={`font-black text-sm ${formData.voiceId === voice.id ? 'text-white' : 'text-slate-400'}`}>{voice.name}</p>
+                                  <p className="text-[9px] text-slate-500 font-medium uppercase tracking-widest italic">{voice.description?.split(' ')[0]}</p>
+                               </div>
+                               {formData.voiceId === voice.id && (
+                                 <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                                    <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping"></div>
+                                 </div>
+                               )}
+                            </button>
+                          ))}
+                       </div>
+                    </div>
+                  </form>
+                </div>
+              )}
+           </div>
+        </div>
+      )}
+
+      {seriesToDelete && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+           <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] w-full max-w-md p-10 text-center shadow-2xl animate-in zoom-in-95">
+              <h2 className="text-2xl font-black text-white mb-8">Delete {seriesToDelete.topic}?</h2>
+              <div className="flex flex-col gap-3">
+                 <button onClick={confirmDeleteSeries} className="w-full py-4 bg-rose-600 text-white font-black rounded-2xl">Confirm Deletion</button>
+                 <button onClick={() => setSeriesToDelete(null)} className="w-full py-4 bg-slate-800 text-slate-400 font-bold rounded-2xl">Cancel</button>
+              </div>
+           </div>
         </div>
       )}
     </div>
