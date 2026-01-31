@@ -4,13 +4,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 export class GeminiService {
   
   static async testConnection() {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey || apiKey.trim() === "") {
-      return { success: false, error: "API_KEY_MISSING" };
-    }
-
     try {
-      const ai = new GoogleGenAI({ apiKey });
+      // Create fresh instance every time
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
       await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: 'ping',
@@ -20,16 +16,13 @@ export class GeminiService {
       console.error("API Connection Test Failed:", error);
       return { 
         success: false, 
-        error: error.message || "Connection failed. Please verify your project billing." 
+        error: error.message || "Connection failed" 
       };
     }
   }
 
   static async generateScript(topic: string, description: string, tone: string, style: string, durationSeconds: number = 60, voiceId: string = 'liam') {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) throw new Error("API_KEY_MISSING");
-    
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
     
     const sceneCount = Math.max(4, Math.ceil(durationSeconds / 9));
     const targetWordCount = Math.floor((durationSeconds / 60) * 150); 
@@ -98,11 +91,8 @@ export class GeminiService {
   }
 
   static async generateImage(prompt: string, anchor: string, style: string) {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) return null;
-
     try {
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
       const fullPrompt = `Vertical 9:16 cinematic frame. Subject: ${anchor}. Scene: ${prompt}. Art Style: ${style}. High detail, 8k, consistent subject.`;
       
       const response = await ai.models.generateContent({

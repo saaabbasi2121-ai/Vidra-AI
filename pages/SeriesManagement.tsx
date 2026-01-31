@@ -48,21 +48,17 @@ const SeriesManagement: React.FC = () => {
     n.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const ensureApiKey = async () => {
+  /**
+   * Proactively triggers API key selection if missing.
+   * Following the "Assume success" rule for race conditions.
+   */
+  const ensureApiKeySelection = async () => {
     if (typeof window.aistudio !== 'undefined') {
       const hasKey = await window.aistudio.hasSelectedApiKey();
       if (!hasKey) {
         await window.aistudio.openSelectKey();
-        return true; // Proceed assuming selection works
+        return true; // Proceed immediately
       }
-    }
-    
-    if (!process.env.API_KEY || process.env.API_KEY.trim() === "") {
-      if (typeof window.aistudio !== 'undefined') {
-        await window.aistudio.openSelectKey();
-        return true;
-      }
-      return false;
     }
     return true;
   };
@@ -81,8 +77,8 @@ const SeriesManagement: React.FC = () => {
   const handlePreviewVoice = async (vId: string) => {
     if (previewingVoiceId === vId) return;
 
-    // Trigger key selection if missing before preview
-    await ensureApiKey();
+    // Trigger key selection if we're in the AI Studio context
+    await ensureApiKeySelection();
 
     setPreviewingVoiceId(vId);
     
@@ -123,51 +119,25 @@ const SeriesManagement: React.FC = () => {
     if (window.navigator.vibrate) window.navigator.vibrate(100);
   };
 
-  const onVoiceClick = (vId: string) => {
-    handlePreviewVoice(vId);
-  };
-
-  const onVoiceDoubleClick = (vId: string) => {
-    handleSelectVoice(vId);
-  };
-
-  const onVoicePointerDown = (vId: string) => {
-    const timer = setTimeout(() => {
-      handleSelectVoice(vId);
-    }, 800); 
-    setLongPressTimer(timer);
-  };
-
-  const onVoicePointerUp = () => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      setLongPressTimer(null);
-    }
-  };
-
   const handleLaunch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedNiche) return;
     
-    await ensureApiKey();
+    await ensureApiKeySelection();
 
     setIsGenerating(true);
-    setGenProgress("Connecting to Pipeline...");
+    setGenProgress("Verifying Pipeline...");
     
     // Explicitly test the connection
     const test = await GeminiService.testConnection();
     if (!test.success) {
-      if (test.error === "API_KEY_MISSING") {
-        if (typeof window.aistudio !== 'undefined') {
-          await window.aistudio.openSelectKey();
-        } else {
-          alert("Please configure an API Key in your environment.");
-        }
-      } else if (test.error.includes("403") || test.error.includes("Key") || test.error.includes("not found")) {
-        alert("API Key validation failed. Please select a valid key from a paid project.");
-        if (typeof window.aistudio !== 'undefined') await window.aistudio.openSelectKey();
+      // Handle the "Requested entity was not found" or key errors by re-opening the key dialog
+      if (typeof window.aistudio !== 'undefined' && 
+         (test.error.includes("entity was not found") || test.error.includes("403") || test.error.includes("key") || test.error.includes("API key"))) {
+         await window.aistudio.openSelectKey();
       } else {
-        alert(`Pipeline Status: ${test.error}`);
+         console.error("Pipeline Error:", test.error);
+         alert(`Pipeline Status: ${test.error}`);
       }
       setIsGenerating(false);
       return;
@@ -232,7 +202,12 @@ const SeriesManagement: React.FC = () => {
       }, 1000);
     } catch (err: any) {
       console.error("Critical Failure:", err);
-      alert(`Generation Failure: ${err.message || "Unknown error occurred."}`);
+      // If we failed due to a missing/bad key during bundle generation, try to recover
+      if (err.message?.includes("API key") && typeof window.aistudio !== 'undefined') {
+         await window.aistudio.openSelectKey();
+      } else {
+         alert(`Generation Failure: ${err.message || "Unknown error occurred."}`);
+      }
       setIsGenerating(false);
     }
   };
@@ -371,11 +346,8 @@ const SeriesManagement: React.FC = () => {
                           {availableVoices.filter(v => v.gender === voiceFilter).map(voice => (
                             <div 
                               key={voice.id} 
-                              onClick={() => onVoiceClick(voice.id)}
-                              onDoubleClick={() => onVoiceDoubleClick(voice.id)}
-                              onPointerDown={() => onVoicePointerDown(voice.id)}
-                              onPointerUp={onVoicePointerUp}
-                              onPointerLeave={onVoicePointerUp}
+                              onClick={() => handlePreviewVoice(voice.id)}
+                              onDoubleClick={() => handleSelectVoice(voice.id)}
                               className={`p-4 rounded-3xl border transition-all text-left flex gap-4 items-center group relative cursor-pointer select-none ${formData.voiceId === voice.id ? 'bg-indigo-600/20 border-indigo-500 shadow-[0_10px_30px_rgba(99,102,241,0.15)]' : 'bg-slate-950 border-slate-800 hover:border-slate-700 shadow-inner'}`}
                             >
                                <div className={`w-12 h-12 rounded-xl bg-slate-800 flex-shrink-0 border border-slate-700 overflow-hidden shadow-lg transition-all duration-300 ${previewingVoiceId === voice.id ? 'scale-110 border-indigo-500 ring-4 ring-indigo-500/20' : ''}`}>

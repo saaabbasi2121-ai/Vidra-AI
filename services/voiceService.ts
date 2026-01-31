@@ -2,30 +2,11 @@
 import { VoiceOption } from '../types';
 import { GoogleGenAI, Modality } from "@google/genai";
 
-// Gemini prebuilt voices: Charon, Puck, Kore, Fenrir, Zephyr
 const GEMINI_VOICE_MAP: Record<string, string> = {
-  // Male mappings
-  'liam': 'zephyr',
-  'james': 'charon',
-  'robert': 'puck',
-  'michael': 'fenrir',
-  'william': 'zephyr',
-  'david': 'charon',
-  'richard': 'puck',
-  'joseph': 'fenrir',
-  'thomas': 'zephyr',
-  'charles': 'charon',
-  // Female mappings
-  'emma': 'kore',
-  'olivia': 'kore',
-  'ava': 'kore',
-  'isabella': 'kore',
-  'sophia': 'kore',
-  'charlotte': 'kore',
-  'mia': 'kore',
-  'amelia': 'kore',
-  'harper': 'kore',
-  'evelyn': 'kore',
+  'liam': 'zephyr', 'james': 'charon', 'robert': 'puck', 'michael': 'fenrir', 'william': 'zephyr',
+  'david': 'charon', 'richard': 'puck', 'joseph': 'fenrir', 'thomas': 'zephyr', 'charles': 'charon',
+  'emma': 'kore', 'olivia': 'kore', 'ava': 'kore', 'isabella': 'kore', 'sophia': 'kore',
+  'charlotte': 'kore', 'mia': 'kore', 'amelia': 'kore', 'harper': 'kore', 'evelyn': 'kore',
 };
 
 export function decodeBase64ToUint8(base64: string) {
@@ -62,7 +43,7 @@ export class VoiceService {
     const maleNames = ['Liam', 'James', 'Robert', 'Michael', 'William', 'David', 'Richard', 'Joseph', 'Thomas', 'Charles'];
     const femaleNames = ['Emma', 'Olivia', 'Ava', 'Isabella', 'Sophia', 'Charlotte', 'Mia', 'Amelia', 'Harper', 'Evelyn'];
 
-    const avatars: VoiceOption[] = [
+    return [
       ...maleNames.map(name => ({
         id: name.toLowerCase(),
         name: `${name}`,
@@ -80,17 +61,12 @@ export class VoiceService {
         avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}&gender=female`
       }))
     ];
-
-    return avatars;
   }
 
   static async generateGeminiTTS(text: string, voiceId: string): Promise<string | null> {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) return null;
-    
     try {
       const actualVoice = GEMINI_VOICE_MAP[voiceId.toLowerCase()] || 'zephyr';
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text }] }],
@@ -104,8 +80,7 @@ export class VoiceService {
         },
       });
 
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      return base64Audio || null;
+      return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
     } catch (err) {
       console.error("Gemini TTS failed:", err);
       return null;
