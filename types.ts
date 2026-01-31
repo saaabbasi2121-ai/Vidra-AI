@@ -20,6 +20,36 @@ export interface SocialAccount {
   lastSync?: string;
 }
 
+export interface VideoSeries {
+  id: string;
+  topic: string;
+  tone: string;
+  style: string;
+  platform: VideoPlatform;
+  frequency: 'Daily' | '3x / week' | 'Weekly';
+  isActive: boolean;
+  createdAt: string;
+  lastGeneration?: string;
+}
+
+export interface VideoScene {
+  text: string;
+  imagePrompt: string;
+  imageUrl?: string;
+}
+
+export interface GeneratedVideo {
+  id: string;
+  seriesId: string;
+  title: string;
+  script: string;
+  scenes: VideoScene[];
+  thumbnailUrl: string;
+  status: 'Generating' | 'Ready' | 'Posted' | 'Failed';
+  scheduledAt: string;
+  platforms: VideoPlatform[];
+}
+
 export interface PlanLimits {
   videosPerWeek: number;
   maxSeries: number;
@@ -47,36 +77,3 @@ export const PLAN_CONFIGS: Record<SubscriptionPlan, PlanLimits> = {
     features: ['Custom Voice Cloning', 'Bulk Generation', 'API Access']
   }
 };
-
-export interface VideoSeries {
-  id: string;
-  topic: string;
-  tone: string;
-  style: string;
-  platform: VideoPlatform;
-  frequency: 'Daily' | 'Weekly' | 'Bi-Weekly';
-  isActive: boolean;
-  createdAt: string;
-  lastGeneration?: string;
-}
-
-export interface GeneratedVideo {
-  id: string;
-  seriesId: string;
-  title: string;
-  script: string;
-  thumbnailUrl: string;
-  videoUrl?: string;
-  status: 'Generating' | 'Ready' | 'Posted' | 'Failed';
-  scheduledAt: string;
-  platforms: VideoPlatform[];
-}
-
-export interface UserProfile {
-  name: string;
-  email: string;
-  plan: SubscriptionPlan;
-  videosCreatedThisWeek: number;
-  totalViews: number;
-  socialAccounts: SocialAccount[];
-}

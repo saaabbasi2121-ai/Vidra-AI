@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type, Modality } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
 const API_KEY = process.env.API_KEY || '';
 
@@ -11,9 +11,6 @@ export class GeminiService {
     return new GoogleGenAI({ apiKey: API_KEY });
   }
 
-  /**
-   * Verifies if the API key is valid and the service is reachable.
-   */
   static async testConnection() {
     try {
       const ai = this.getAI();
@@ -27,9 +24,6 @@ export class GeminiService {
     }
   }
 
-  /**
-   * Generates a viral short-form video script.
-   */
   static async generateScript(topic: string, tone: string, style: string) {
     const ai = this.getAI();
     const prompt = `
@@ -41,8 +35,7 @@ export class GeminiService {
       Structure the response as a JSON object with:
       - title: A catchy title
       - hook: The first 3 seconds to grab attention
-      - body: The main content split into 5-6 scenes
-      - scenes: An array of objects, each with { text: "voiceover line", imagePrompt: "detailed prompt for image generation" }
+      - scenes: An array of 4 objects, each with { text: "voiceover line", imagePrompt: "detailed prompt for image generation" }
       - callToAction: End with a subscribe/follow prompt
     `;
 
@@ -56,7 +49,6 @@ export class GeminiService {
           properties: {
             title: { type: Type.STRING },
             hook: { type: Type.STRING },
-            body: { type: Type.STRING },
             scenes: {
               type: Type.ARRAY,
               items: {
@@ -77,9 +69,6 @@ export class GeminiService {
     return JSON.parse(response.text);
   }
 
-  /**
-   * Generates a 9:16 vertical image.
-   */
   static async generateImage(prompt: string) {
     const ai = this.getAI();
     const response = await ai.models.generateContent({
@@ -100,5 +89,28 @@ export class GeminiService {
       }
     }
     return null;
+  }
+
+  /**
+   * Generates a complete video bundle (script + images) for a series.
+   */
+  static async generateFullVideoBundle(topic: string, tone: string, style: string) {
+    const script = await this.generateScript(topic, tone, style);
+    const scenesWithImages = [];
+    
+    // Generate images for all scenes
+    for (const scene of script.scenes) {
+      const imageUrl = await this.generateImage(scene.imagePrompt);
+      scenesWithImages.push({
+        ...scene,
+        imageUrl: imageUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800'
+      });
+    }
+
+    return {
+      ...script,
+      scenes: scenesWithImages,
+      thumbnailUrl: scenesWithImages[0]?.imageUrl
+    };
   }
 }
