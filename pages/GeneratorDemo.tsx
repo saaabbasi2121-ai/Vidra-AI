@@ -66,7 +66,8 @@ const GeneratorDemo: React.FC = () => {
       }
       addLog('✅ API Connection verified.');
 
-      const script = await GeminiService.generateScript(topic, 'Inspirational', 'Cinematic Photography');
+      // Fix: Added missing description argument to match GeminiService.generateScript(topic, description, tone, style)
+      const script = await GeminiService.generateScript(topic, topic, 'Inspirational', 'Cinematic Photography');
       setResult(script);
       addLog(`✅ Script generated: "${script.title}"`);
       

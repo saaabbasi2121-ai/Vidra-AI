@@ -1,14 +1,11 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Guideline: Always use process.env.API_KEY directly when initializing the @google/genai client instance.
 export class GeminiService {
   
-  // Fix: Added testConnection method to check API availability as requested by GeneratorDemo.tsx
   static async testConnection() {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      // Guideline: For basic text tasks, use 'gemini-3-flash-preview'.
       await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: 'ping',
@@ -20,27 +17,30 @@ export class GeminiService {
     }
   }
 
-  static async generateScript(topic: string, tone: string, style: string, durationSeconds: number = 60) {
-    // Guideline: Create a new GoogleGenAI instance right before making an API call.
+  static async generateScript(topic: string, description: string, tone: string, style: string, durationSeconds: number = 60) {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    // Calculate approximate scene count based on duration (avg 1 scene per 10-15 seconds)
     const sceneCount = Math.max(3, Math.floor(durationSeconds / 12));
-    const targetWordCount = Math.floor(durationSeconds * 2.5); // ~150 words per minute
+    const targetWordCount = Math.floor(durationSeconds * 2.5);
 
+    // Prompt heavily weighted on the unique description to prevent duplicate-style outputs
     const prompt = `
-      Create a viral short-form video script for a faceless video.
-      Topic: ${topic}
-      Tone: ${tone}
-      Visual Style: ${style}
-      Target Duration: ${durationSeconds} seconds
-      Target Word Count: ~${targetWordCount} words
+      Create a unique, viral short-form video script.
+      SERIES NAME: ${topic}
+      SERIES GENRE/CONTEXT: ${description}
+      TONE: ${tone}
+      VISUAL STYLE: ${style}
+      DURATION: ${durationSeconds} seconds
+      WORD COUNT: ~${targetWordCount} words
+
+      IMPORTANT: Use the SERIES GENRE/CONTEXT to differentiate this from other videos on similar topics. 
+      Focus on the specific angles and "vibe" described in the context.
 
       Structure the response as a JSON object with:
-      - title: A catchy title
-      - hook: The first 3 seconds to grab attention
-      - scenes: An array of exactly ${sceneCount} objects, each with { text: "voiceover line (approx ${Math.floor(targetWordCount/sceneCount)} words)", imagePrompt: "detailed prompt for image generation" }
-      - callToAction: End with a subscribe/follow prompt
+      - title: A catchy, unique title
+      - hook: A high-retention 3-second opening
+      - scenes: An array of exactly ${sceneCount} objects with { text, imagePrompt }
+      - callToAction: A unique outro aligned with the niche
     `;
 
     const response = await ai.models.generateContent({
@@ -71,38 +71,31 @@ export class GeminiService {
       }
     });
 
-    // Guideline: Use the .text property (not a method) to get generated text.
     return JSON.parse(response.text || '{}');
   }
 
   static async generateImage(prompt: string) {
-    // Guideline: Create a new GoogleGenAI instance right before making an API call.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-      // Guideline: Generate images using 'gemini-2.5-flash-image' by default.
       model: 'gemini-2.5-flash-image',
       contents: {
-        parts: [{ text: `${prompt}. High resolution, vertical 9:16 aspect ratio, cinematic photography, professional lighting.` }]
+        parts: [{ text: `${prompt}. Cinematic, vertical 9:16, 4k resolution.` }]
       },
       config: {
-        imageConfig: {
-          aspectRatio: "9:16"
-        }
+        imageConfig: { aspectRatio: "9:16" }
       }
     });
 
-    // Guideline: Iterate through all parts to find the image part; do not assume the first part is an image.
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
-        const base64EncodeString: string = part.inlineData.data;
-        return `data:image/png;base64,${base64EncodeString}`;
+        return `data:image/png;base64,${part.inlineData.data}`;
       }
     }
     return null;
   }
 
-  static async generateFullVideoBundle(topic: string, tone: string, style: string, durationSeconds: number = 60) {
-    const script = await this.generateScript(topic, tone, style, durationSeconds);
+  static async generateFullVideoBundle(topic: string, description: string, tone: string, style: string, durationSeconds: number = 60) {
+    const script = await this.generateScript(topic, description, tone, style, durationSeconds);
     const scenesWithImages = [];
     
     for (const scene of script.scenes) {

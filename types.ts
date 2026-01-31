@@ -19,7 +19,6 @@ export interface VoiceOption {
   provider: 'ElevenLabs' | 'Gemini';
 }
 
-// Added SocialAccount interface to fix missing export error in SocialSettings.tsx
 export interface SocialAccount {
   platform: VideoPlatform;
   username: string;
@@ -30,6 +29,7 @@ export interface SocialAccount {
 export interface VideoSeries {
   id: string;
   topic: string;
+  description: string; // New field for deep context
   tone: string;
   style: string;
   voiceId: string;
@@ -50,16 +50,18 @@ export interface VideoScene {
 
 export interface GeneratedVideo {
   id: string;
-  seriesId: string;
+  seriesId?: string; // Optional for manual uploads
   title: string;
   script: string;
   scenes: VideoScene[];
   thumbnailUrl: string;
+  videoUrl?: string; // For manual uploads
   status: 'Generating' | 'Ready' | 'Posted' | 'Failed';
   scheduledAt: string;
   platforms: VideoPlatform[];
   voiceId?: string;
   durationSeconds?: number;
+  source: 'AI' | 'Manual'; // Differentiate between AI and user-uploaded
 }
 
 export interface PlanLimits {
