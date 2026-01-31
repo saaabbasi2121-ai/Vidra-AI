@@ -85,12 +85,8 @@ export class VoiceService {
   }
 
   static async generateGeminiTTS(text: string, voiceId: string): Promise<string | null> {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      console.warn("TTS skipped: Missing API Key");
-      return null;
-    }
-
+    const apiKey = process.env.API_KEY || "";
+    
     try {
       const actualVoice = GEMINI_VOICE_MAP[voiceId.toLowerCase()] || 'zephyr';
       const ai = new GoogleGenAI({ apiKey });

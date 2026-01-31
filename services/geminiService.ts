@@ -4,27 +4,27 @@ import { GoogleGenAI, Type } from "@google/genai";
 export class GeminiService {
   
   private static getClient() {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      throw new Error("API_KEY_MISSING");
-    }
+    // We use process.env.API_KEY directly as required.
+    // If it's missing, we still try to initialize to allow the platform's 
+    // injection mechanisms a chance to work or the SDK to provide the correct error.
+    const apiKey = process.env.API_KEY || "";
     return new GoogleGenAI({ apiKey });
   }
 
   static async testConnection() {
     try {
       const ai = this.getClient();
-      await ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: 'ping',
       });
       return { success: true };
     } catch (error: any) {
-      console.error("API Key Verification Failed:", error);
-      if (error.message === "API_KEY_MISSING") {
-        return { success: false, error: "API Key not found. Please select an API key." };
-      }
-      return { success: false, error: error.message || "Connection failed" };
+      console.error("API Connection Test Failed:", error);
+      return { 
+        success: false, 
+        error: error.message || "Connection failed. Please check your API key configuration." 
+      };
     }
   }
 

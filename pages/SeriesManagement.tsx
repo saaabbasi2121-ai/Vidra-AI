@@ -49,18 +49,18 @@ const SeriesManagement: React.FC = () => {
   );
 
   const checkKeyBeforeAction = async () => {
+    // Check for aistudio context helper first
     if (typeof window.aistudio !== 'undefined') {
       const hasKey = await window.aistudio.hasSelectedApiKey();
       if (!hasKey) {
         await window.aistudio.openSelectKey();
-        return true; // Assume success and proceed per instructions
+        // PER INSTRUCTIONS: Assume success after triggering the dialog and proceed
+        return true; 
       }
     }
-    if (!process.env.API_KEY) {
-      // Fallback if aistudio helper isn't enough
-      alert("An API key must be set when running in browser. Please configure your API key.");
-      return false;
-    }
+    
+    // If process.env.API_KEY is missing but we're not in aistudio, 
+    // we still return true to let the API call happen and fail naturally if needed.
     return true;
   };
 
@@ -78,9 +78,8 @@ const SeriesManagement: React.FC = () => {
   const handlePreviewVoice = async (vId: string) => {
     if (previewingVoiceId === vId) return;
 
-    // Check key before preview
-    const keyReady = await checkKeyBeforeAction();
-    if (!keyReady) return;
+    // Ensure we have a chance to select a key before previewing
+    await checkKeyBeforeAction();
 
     setPreviewingVoiceId(vId);
     
@@ -150,26 +149,29 @@ const SeriesManagement: React.FC = () => {
     e.preventDefault();
     if (!selectedNiche) return;
     
-    const keyReady = await checkKeyBeforeAction();
-    if (!keyReady) return;
+    // Trigger key selection if needed
+    await checkKeyBeforeAction();
 
     setIsGenerating(true);
-    setGenProgress("Connecting to Engine...");
+    setGenProgress("Orchestrating Pipeline...");
     
-    // Double check connection using actual API call
+    // Test the connection to ensure the key is active
     const test = await GeminiService.testConnection();
     if (!test.success) {
-      if (typeof window.aistudio !== 'undefined' && (test.error.includes("Key") || test.error.includes("403") || test.error.includes("API_KEY_MISSING"))) {
-         alert("API Key invalid or missing. Please select a valid key from a paid GCP project.");
+      // If the entity wasn't found or it's a key error, reset and ask again
+      if (typeof window.aistudio !== 'undefined' && 
+         (test.error.includes("entity was not found") || test.error.includes("403") || test.error.includes("key"))) {
+         alert("Validation failed. Please select a valid API key from a paid project.");
          await window.aistudio.openSelectKey();
       } else {
-         alert(`Pipeline Status: ${test.error}. Ensure API_KEY is set correctly.`);
+         console.error("Connection Error:", test.error);
+         alert(`Pipeline Status: ${test.error}`);
       }
       setIsGenerating(false);
       return;
     }
 
-    setGenProgress("Synthesizing Series Assets...");
+    setGenProgress("Synthesizing Assets...");
     const newId = Math.random().toString(36).substr(2, 9);
     
     try {
@@ -221,7 +223,7 @@ const SeriesManagement: React.FC = () => {
       const existingVideos = JSON.parse(localStorage.getItem('vidra_videos') || '[]');
       localStorage.setItem('vidra_videos', JSON.stringify([newVideo, ...existingVideos]));
 
-      setGenProgress("Generation Complete!");
+      setGenProgress("Success!");
       setTimeout(() => {
         setIsGenerating(false);
         navigate('/queue');
