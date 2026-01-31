@@ -3,10 +3,17 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 export class GeminiService {
   
+  private static getClient() {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error("API_KEY_MISSING");
+    }
+    return new GoogleGenAI({ apiKey });
+  }
+
   static async testConnection() {
     try {
-      // Re-initialize with the latest process.env.API_KEY
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = this.getClient();
       await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: 'ping',
@@ -14,12 +21,15 @@ export class GeminiService {
       return { success: true };
     } catch (error: any) {
       console.error("API Key Verification Failed:", error);
+      if (error.message === "API_KEY_MISSING") {
+        return { success: false, error: "API Key not found. Please select an API key." };
+      }
       return { success: false, error: error.message || "Connection failed" };
     }
   }
 
   static async generateScript(topic: string, description: string, tone: string, style: string, durationSeconds: number = 60, voiceId: string = 'liam') {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = this.getClient();
     
     const sceneCount = Math.max(4, Math.ceil(durationSeconds / 9));
     const targetWordCount = Math.floor((durationSeconds / 60) * 150); 
@@ -93,10 +103,10 @@ export class GeminiService {
   }
 
   static async generateImage(prompt: string, anchor: string, style: string) {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const fullPrompt = `Vertical 9:16 cinematic frame. Subject: ${anchor}. Scene: ${prompt}. Art Style: ${style}. High detail, 8k, consistent subject.`;
-    
     try {
+      const ai = this.getClient();
+      const fullPrompt = `Vertical 9:16 cinematic frame. Subject: ${anchor}. Scene: ${prompt}. Art Style: ${style}. High detail, 8k, consistent subject.`;
+      
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts: [{ text: fullPrompt }] },

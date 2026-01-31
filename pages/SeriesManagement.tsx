@@ -48,6 +48,22 @@ const SeriesManagement: React.FC = () => {
     n.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const checkKeyBeforeAction = async () => {
+    if (typeof window.aistudio !== 'undefined') {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+        await window.aistudio.openSelectKey();
+        return true; // Assume success and proceed per instructions
+      }
+    }
+    if (!process.env.API_KEY) {
+      // Fallback if aistudio helper isn't enough
+      alert("An API key must be set when running in browser. Please configure your API key.");
+      return false;
+    }
+    return true;
+  };
+
   const handleSelectNiche = (niche: NicheCategory) => {
     setSelectedNiche(niche);
     const suggested = availableVoices.find(v => v.id === niche.suggestedVoiceId);
@@ -61,11 +77,18 @@ const SeriesManagement: React.FC = () => {
 
   const handlePreviewVoice = async (vId: string) => {
     if (previewingVoiceId === vId) return;
+
+    // Check key before preview
+    const keyReady = await checkKeyBeforeAction();
+    if (!keyReady) return;
+
     setPreviewingVoiceId(vId);
     
     // Stop current preview
     if (currentSourceRef.current) {
-      try { currentSourceRef.current.stop(); } catch (e) {}
+      try {
+        currentSourceRef.current.stop();
+      } catch (e) {}
     }
 
     try {
@@ -75,9 +98,7 @@ const SeriesManagement: React.FC = () => {
       const ctx = audioContextRef.current;
       if (ctx.state === 'suspended') await ctx.resume();
       
-      const voiceObj = availableVoices.find(v => v.id === vId);
-      const voiceName = voiceObj?.name || "Partner";
-      const previewText = `Hi, I'm ${voiceName}. I'm ready to bring your ${selectedNiche?.name || 'video'} to life.`;
+      const previewText = "Hi Welcome aboard to Vidra for your anonymous journey to success while you sleep.";
       
       const base64Audio = await VoiceService.generateGeminiTTS(previewText, vId);
       if (base64Audio) {
@@ -93,24 +114,21 @@ const SeriesManagement: React.FC = () => {
         setPreviewingVoiceId(null); 
       }
     } catch (err) { 
+      console.error("Preview failed", err);
       setPreviewingVoiceId(null); 
     }
   };
 
   const handleSelectVoice = (vId: string) => {
     setFormData(prev => ({ ...prev, voiceId: vId }));
-    // Haptic feedback
     if (window.navigator.vibrate) window.navigator.vibrate(100);
   };
 
-  // 2-Stage Interaction Handlers
   const onVoiceClick = (vId: string) => {
-    // Single tap = Preview logic
     handlePreviewVoice(vId);
   };
 
   const onVoiceDoubleClick = (vId: string) => {
-    // Double tap = Selection logic
     handleSelectVoice(vId);
   };
 
@@ -132,27 +150,20 @@ const SeriesManagement: React.FC = () => {
     e.preventDefault();
     if (!selectedNiche) return;
     
+    const keyReady = await checkKeyBeforeAction();
+    if (!keyReady) return;
+
     setIsGenerating(true);
     setGenProgress("Connecting to Engine...");
     
-    // Safety check for key selection
-    if (typeof window.aistudio !== 'undefined') {
-      const hasKey = await window.aistudio.hasSelectedApiKey();
-      if (!hasKey) {
-        setGenProgress("API Key Required...");
-        await window.aistudio.openSelectKey();
-        // Proceeding assuming key was set (race condition rule)
-      }
-    }
-
-    // Double check connection
+    // Double check connection using actual API call
     const test = await GeminiService.testConnection();
     if (!test.success) {
-      if (typeof window.aistudio !== 'undefined' && (test.error.includes("key") || test.error.includes("403"))) {
+      if (typeof window.aistudio !== 'undefined' && (test.error.includes("Key") || test.error.includes("403") || test.error.includes("API_KEY_MISSING"))) {
          alert("API Key invalid or missing. Please select a valid key from a paid GCP project.");
          await window.aistudio.openSelectKey();
       } else {
-         alert(`Pipeline Status: ${test.error}. Ensure API_KEY is set in environment.`);
+         alert(`Pipeline Status: ${test.error}. Ensure API_KEY is set correctly.`);
       }
       setIsGenerating(false);
       return;
